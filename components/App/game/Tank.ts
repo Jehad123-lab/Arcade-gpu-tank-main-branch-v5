@@ -144,54 +144,25 @@ export class Tank {
     this.grenadeRecoil -= (ts / 1000) * 1.5;
     if (this.grenadeRecoil < 0) this.grenadeRecoil = 0;
     
-    // 1. ARCADE MOVEMENT LOGIC (AS PER SKILL.MD)
+    // 1. TANK MOVEMENT LOGIC
     const throttle = (Math.abs(moveDir.y) < 0.05) ? 0 : moveDir.y;
-    const steer = (Math.abs(moveDir.x) < 0.05) ? 0 : moveDir.x;
+    const steer = (Math.abs(moveDir.x) < 0.05) ? 0 : -moveDir.x;
 
-    // A. SENSITIVITY & DIRECTION
-    if (throttle > 0) {
-        this.newSens = 1;
-        this.sens = this.sens === 0 ? 1 : this.sens;
-    } else if (throttle < 0) {
-        this.newSens = -1;
-        this.sens = this.sens === 0 ? -1 : this.sens;
-    } else {
-        this.newSens = 0;
-    }
+    // LINEAR SPEED
+    let targetSpeed = throttle * this.options.maxSpeed;
+    const linearAccel = throttle !== 0 ? 8.0 : 4.0;
+    this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
+    this.speed = UT.DEADZONE(this.speed, 0.1);
 
-    if (this.speed <= this.options.minSpeed && this.newSens === 0) {
-        this.sens = 0;
-    }
-
-    // B. ACCELERATION
-    if (this.sens !== 0 && this.newSens === 0) {
-      // Engine brake
-      this.speed -= this.speed * this.options.engineBrakeFriction * (ts / 1000);
-    } else if (this.sens !== 0 && this.newSens === this.sens) {
-      // Normal acceleration
-      this.speed += this.options.accelerationSpeed * (ts / 1000);
-    } else if (this.sens !== 0 && this.newSens !== this.sens) {
-      // Braking
-      this.speed -= this.speed * this.options.brakeFriction * (ts / 1000);
-    }
-
-    this.speed = UT.CLAMP(this.speed, 0, this.options.maxSpeed);
-    this.speed = UT.DEADZONE(this.speed, this.options.minSpeed);
-
-    // C. WHEEL ANGLE (STEERING RACK)
-    if (steer < 0) {
-        this.wheelAngle -= this.options.steerSpeed * (ts / 1000);
-    } else if (steer > 0) {
-        this.wheelAngle += this.options.steerSpeed * (ts / 1000);
-    } else {
-        this.wheelAngle = UT.DEADZONE(this.wheelAngle - (this.wheelAngle * 5.0 * (ts / 1000)));
-    }
-    this.wheelAngle = UT.CLAMP(this.wheelAngle, -this.options.maxTurn, this.options.maxTurn);
-
-    // D. DIRECTION ANGLE (VEHICLE ROTATION)
-    const rotationFactor = UT.MAP_VALUE_FROM_CURVE(this.speed, this.options.swiftnessMap);
-    const adherence = 1.0; // Simplification for Jolt version
-    this.rotation += adherence * this.sens * this.wheelAngle * this.options.quickFactor * rotationFactor * (ts / 1000);
+    // ANGULAR SPEED (Rotation)
+    // Unlike cars, tanks can rotate at zero speed.
+    // We increase rotation speed when stationary for better "pivot" feel
+    const pivotBoost = Math.abs(this.speed) < 1.0 ? 1.5 : 1.0;
+    const targetRotSpeed = steer * 2.5 * pivotBoost;
+    const angularAccel = 10.0;
+    const currentAngularVel = targetRotSpeed; // Simplified for snappy tank pivots
+    
+    this.rotation += currentAngularVel * (ts / 1000);
     this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
     // 2. JOLT PHYSICS SYNC
@@ -208,11 +179,11 @@ export class Tank {
     const verticalVel = this.physicsBody.body.GetLinearVelocity().GetY();
     
     // projecting the intended arcade speed onto the physics body
-    const newVelX = forward[0] * this.speed * this.sens;
-    const newVelZ = forward[2] * this.speed * this.sens;
+    const newVelX = forward[0] * this.speed;
+    const newVelZ = forward[2] * this.speed;
     
     // Vertical assist for slopes
-    const verticalAssist = forward[1] * this.speed * this.sens;
+    const verticalAssist = forward[1] * this.speed;
     const newVelY = verticalVel * 0.8 + verticalAssist;
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(

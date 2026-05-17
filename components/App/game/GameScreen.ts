@@ -319,15 +319,16 @@ export class GameScreen extends Screen {
     const finalTargetDist = this.isSniperMode ? 8.0 : this.targetCameraDistance;
     this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
 
-    // ARCADE CHASE CAMERA (FROM SKILL.MD)
-    const tankQuat = Quaternion.createFromEuler(this.tank.rotation, 0, 0, 'YXZ');
-    const tankForward = tankQuat.rotateVector([0, 0, -1]);
+    // HYBRID FREE-LOOK CAMERA (FROM SKILL.MD CONCEPTS)
+    // We use cameraYaw and cameraPitch (mouse-driven) instead of just tank rotation
+    const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
+    const cameraOffsetVec = rotQ.rotateVector([0, 0, this.cameraDistance]);
     
-    // Actually, following the skill strictly:
+    // Ideal position is behind the player relative to the VIEW direction
     const idealPos: vec3 = [
-        playerPos[0] - tankForward[0] * this.cameraDistance,
-        playerPos[1] + 6.0,
-        playerPos[2] - tankForward[2] * this.cameraDistance
+        playerPos[0] + cameraOffsetVec[0],
+        playerPos[1] + cameraOffsetVec[1] + 2.0, // Height offset
+        playerPos[2] + cameraOffsetVec[2]
     ];
     
     // Prevent camera from going under ground
@@ -336,18 +337,26 @@ export class GameScreen extends Screen {
     }
     
     // Position Smoothing (Chase LERP)
-    const camAlpha = 1.0 - Math.exp(-6.0 * (ts / 1000));
+    const camAlpha = 1.0 - Math.exp(-12.0 * (ts / 1000)); // Slightly faster tracking
     this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
     
-    // Shake applied before LookAt
+    // Shake applied before positioning
     const shakeX = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeY = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeZ = (Math.random() - 0.5) * this.shakeIntensity;
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     
-    // Focus on the tank center (slightly elevated)
-    this.camera.lookAt(playerPos[0] + shakeX, playerPos[1] + 2.0 + shakeY, playerPos[2] + shakeZ);
+    // Look Target: Always look a bit ahead of the player in the view direction
+    // This makes aiming feel much more natural as the crosshair doesn't lag
+    const viewForward = rotQ.rotateVector([0, 0, -1]);
+    const lookTarget: vec3 = [
+        playerPos[0] + viewForward[0] * 5.0,
+        playerPos[1] + 1.5 + viewForward[1] * 5.0,
+        playerPos[2] + viewForward[2] * 5.0
+    ];
+
+    this.camera.lookAt(lookTarget[0] + shakeX, lookTarget[1] + shakeY, lookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));
   }

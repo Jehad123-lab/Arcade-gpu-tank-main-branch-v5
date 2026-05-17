@@ -221,8 +221,8 @@ export class GameScreen extends Screen {
     
     if (inputManager.isPointerLockCaptured()) {
         const sensitivity = 0.003;
-        this.cameraYaw += data.movementX * sensitivity;
-        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch + data.movementY * sensitivity));
+        this.cameraYaw -= data.movementX * sensitivity;
+        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - data.movementY * sensitivity));
         this.lastMouseManualTS = Date.now();
     }
   };
@@ -328,7 +328,7 @@ export class GameScreen extends Screen {
     // Ideal position is behind the player relative to the VIEW direction
     const idealPos: vec3 = [
         playerPos[0] + cameraOffsetVec[0],
-        playerPos[1] + cameraOffsetVec[1] + 2.0, // Height offset
+        playerPos[1] + cameraOffsetVec[1] + 3.0, // More height for better view
         playerPos[2] + cameraOffsetVec[2]
     ];
     
@@ -348,13 +348,12 @@ export class GameScreen extends Screen {
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     
-    // Look Target: Always look a bit ahead of the player in the view direction
-    // This makes aiming feel much more natural as the crosshair doesn't lag
+    // Focus on a point ahead of the tank in the camera view direction
     const viewForward = rotQ.rotateVector([0, 0, -1]);
     const lookTarget: vec3 = [
-        playerPos[0] + viewForward[0] * 5.0,
-        playerPos[1] + 1.5 + viewForward[1] * 5.0,
-        playerPos[2] + viewForward[2] * 5.0
+        playerPos[0] + viewForward[0] * 100.0,
+        playerPos[1] + viewForward[1] * 100.0,
+        playerPos[2] + viewForward[2] * 100.0
     ];
 
     this.camera.lookAt(lookTarget[0] + shakeX, lookTarget[1] + shakeY, lookTarget[2] + shakeZ);

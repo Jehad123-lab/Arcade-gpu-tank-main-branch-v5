@@ -42,19 +42,19 @@ export class Tank {
   recoil: number = 0;
 
   options = {
-    accelerationSpeed: 600.0,
-    maxSpeed: 45.0,
+    accelerationSpeed: 30.0,
+    maxSpeed: 18.0,
     minSpeed: 0.1,
-    boostAtStart: 3.5,
-    brakeFriction: 12.0,
-    engineBrakeFriction: 2.0,
-    steerSpeed: 3.0,
+    boostAtStart: 1.0,
+    brakeFriction: 4.0,
+    engineBrakeFriction: 1.5,
+    steerSpeed: 1.5,
     maxTurn: 0.6,
-    quickFactor: 4.5,
+    quickFactor: 3.0,
     swiftnessMap: [
       { mapBegin: 1.0, mapEnd: 1.0, valueMin: 0, valueMax: 10 },
-      { mapBegin: 1.0, mapEnd: 0.6, valueMin: 10, valueMax: 30 },
-      { mapBegin: 0.6, mapEnd: 0.2, valueMin: 30, valueMax: 60 }
+      { mapBegin: 1.0, mapEnd: 0.6, valueMin: 10, valueMax: 20 },
+      { mapBegin: 0.6, mapEnd: 0.4, valueMin: 20, valueMax: 40 }
     ]
   };
 
@@ -150,41 +150,39 @@ export class Tank {
 
     // LINEAR SPEED
     let targetSpeed = throttle * this.options.maxSpeed;
-    const linearAccel = throttle !== 0 ? 8.0 : 4.0;
+    const linearAccel = throttle !== 0 ? 2.5 : 1.2; // Sluggish, heavy acceleration
     this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
-    this.speed = UT.DEADZONE(this.speed, 0.1);
 
-    // ANGULAR SPEED (Rotation)
-    // Unlike cars, tanks can rotate at zero speed.
-    // We increase rotation speed when stationary for better "pivot" feel
-    const pivotBoost = Math.abs(this.speed) < 1.0 ? 1.5 : 1.0;
-    const targetRotSpeed = steer * 2.5 * pivotBoost;
-    const angularAccel = 10.0;
-    const currentAngularVel = targetRotSpeed; // Simplified for snappy tank pivots
-    
-    this.rotation += currentAngularVel * (ts / 1000);
+    // ANGULAR SPEED (Rotation - more sluggish tank pivot)
+    const pivotBoost = Math.abs(this.speed) < 5.0 ? 1.4 : 1.0;
+    const targetTurnSpeed = steer * 1.8 * pivotBoost;
+    this.rotation += targetTurnSpeed * (ts / 1000);
     this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
     // 2. JOLT PHYSICS SYNC
-    const qPhysics = this.physicsBody.body.GetRotation();
-    const currentQuat = new Quaternion(qPhysics.GetW(), qPhysics.GetX(), qPhysics.GetY(), qPhysics.GetZ());
-    
+    // Ensure the body is active so it actually moves
+    gfx3JoltManager.bodyInterface.ActivateBody(this.physicsBody.body.GetID());
+
     // Forced rotation matching our arcade steering
     const targetQuat = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
     const joltQuatSet = new Gfx3Jolt.Quat(targetQuat.x, targetQuat.y, targetQuat.z, targetQuat.w);
     gfx3JoltManager.bodyInterface.SetRotation(this.physicsBody.body.GetID(), joltQuatSet, Gfx3Jolt.EActivation_Activate);
 
+    const qPhysics = this.physicsBody.body.GetRotation();
+    const currentQuat = new Quaternion(qPhysics.GetW(), qPhysics.GetX(), qPhysics.GetY(), qPhysics.GetZ());
+
     // Velocity projection
     const forward = targetQuat.rotateVector([0, 0, -1]);
-    const verticalVel = this.physicsBody.body.GetLinearVelocity().GetY();
+    const currentVel = this.physicsBody.body.GetLinearVelocity();
+    const verticalVel = currentVel.GetY();
     
     // projecting the intended arcade speed onto the physics body
     const newVelX = forward[0] * this.speed;
     const newVelZ = forward[2] * this.speed;
     
-    // Vertical assist for slopes
+    // Vertical assist for slopes and keeping on ground
     const verticalAssist = forward[1] * this.speed;
-    const newVelY = verticalVel * 0.8 + verticalAssist;
+    const newVelY = verticalVel * 0.9 + verticalAssist;
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 

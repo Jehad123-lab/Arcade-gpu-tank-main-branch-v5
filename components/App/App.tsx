@@ -442,7 +442,38 @@ const App = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'flex-end',
+                pointerEvents: 'none'
             }}>
+                <div style={{ pointerEvents: 'auto' }}>
+                    {isMobile && <Joystick onChange={(dir) => {
+                         if (gameScreenRef.current) {
+                            gameScreenRef.current.virtualMoveDir = { x: dir.x, y: -dir.y };
+                         }
+                    }} />}
+                </div>
+
+                <div style={{ display: 'flex', gap: Tokens.spacing.md, pointerEvents: 'auto' }}>
+                    <ActionButton 
+                        icon={BoundingBox} 
+                        size={56} 
+                        color={isZoomed ? Tokens.colors.accent : Tokens.colors.surface}
+                        onClick={() => {
+                            if (gameScreenRef.current) gameScreenRef.current.isSniperMode = !gameScreenRef.current.isSniperMode;
+                        }} 
+                    />
+                    <ActionButton 
+                        icon={Fire} 
+                        size={84}
+                        onDown={(e: any) => handleFire('normal', true, e)}
+                        onUp={(e: any) => handleFire('normal', false, e)}
+                    />
+                    <ActionButton 
+                        icon={ArrowsOut} 
+                        size={64}
+                        onDown={(e: any) => handleFire('grenade', true, e)}
+                        onUp={(e: any) => handleFire('grenade', false, e)}
+                    />
+                </div>
             </div>
 
             <div style={{

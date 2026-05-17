@@ -259,7 +259,7 @@ export class Tank {
     
     // Traverse feel - Heavy and mechanical acceleration
     const targetYawVel = yawDiff * 6.0; // Proportional control
-    const traverseAccel = 12.0;
+    const traverseAccel = 20.0;
     this.turretYawVel = UT.LERP(this.turretYawVel, targetYawVel, 1.0 - Math.exp(-traverseAccel * (ts / 1000)));
     this.turretYaw += this.turretYawVel * (ts / 1000);
     

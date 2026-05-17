@@ -337,8 +337,8 @@ export class GameScreen extends Screen {
         idealPos[1] = 1.0;
     }
     
-    // Position Smoothing (Chase LERP)
-    const camAlpha = 1.0 - Math.exp(-12.0 * (ts / 1000)); // Slightly faster tracking
+    // Position Smoothing (Chase LERP) - Slow down slightly to absorb terrain noise
+    const camAlpha = 1.0 - Math.exp(-9.0 * (ts / 1000)); 
     this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
     
     // Shake applied before positioning
@@ -349,14 +349,17 @@ export class GameScreen extends Screen {
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     
     // Focus on a point ahead of the tank in the camera view direction
+    // Smoothed look-at target to reduce jitter
     const viewForward = rotQ.rotateVector([0, 0, -1]);
-    const lookTarget: vec3 = [
-        playerPos[0] + viewForward[0] * 100.0,
-        playerPos[1] + viewForward[1] * 100.0,
-        playerPos[2] + viewForward[2] * 100.0
+    const targetLook: vec3 = [
+        playerPos[0] + viewForward[0] * 50.0,
+        playerPos[1] + 1.2 + viewForward[1] * 50.0, // Lowered slightly 
+        playerPos[2] + viewForward[2] * 50.0
     ];
+    
+    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, targetLook, 1.0 - Math.exp(-15.0 * (ts / 1000)));
 
-    this.camera.lookAt(lookTarget[0] + shakeX, lookTarget[1] + shakeY, lookTarget[2] + shakeZ);
+    this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));
   }

@@ -83,13 +83,14 @@ export class Tank {
     this.antenna = createBoxMesh(0.05, 1.5, 0.05, [0.1, 0.1, 0.1]);
 
     this.physicsBody = gfx3JoltManager.addBox({
-      width: 3.45, height: 1.2, depth: 3.6,
-      x: 0, y: 2.0, z: 0,
+      width: 3.45, height: 1.0, depth: 3.6, // Slightly shorter physics box to avoid ground issues
+      x: 0, y: 3.0, z: 0, // Spawn higher
       motionType: Gfx3Jolt.EMotionType_Dynamic,
       layer: JOLT_LAYER_MOVING,
       settings: { 
-          mAngularDamping: 2.0, 
-          mMassPropertiesOverride: 10000.0,
+          mAngularDamping: 5.0, // More stable
+          mMassPropertiesOverride: 15000.0,
+          mFriction: 0.1, // Less friction since we set velocity manually
       }
     });
 
@@ -148,47 +149,49 @@ export class Tank {
     const throttle = (Math.abs(moveDir.y) < 0.05) ? 0 : moveDir.y;
     const steer = (Math.abs(moveDir.x) < 0.05) ? 0 : -moveDir.x;
 
-    // LINEAR SPEED
-    let targetSpeed = throttle * this.options.maxSpeed;
-    const linearAccel = throttle !== 0 ? 2.5 : 1.2; // Sluggish, heavy acceleration
+    // LINEAR SPEED - Real Tank Speed (Capped at ~50km/h)
+    const TANK_MAX_SPEED = 12.0; 
+    let targetSpeed = throttle * TANK_MAX_SPEED;
+    const linearAccel = throttle !== 0 ? 1.8 : 0.8; // Sluggish, heavy acceleration
     this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
 
-    // ANGULAR SPEED (Rotation - more sluggish tank pivot)
-    const pivotBoost = Math.abs(this.speed) < 5.0 ? 1.4 : 1.0;
-    const targetTurnSpeed = steer * 1.8 * pivotBoost;
+    // ANGULAR SPEED (Rotation - heavy pivot feel)
+    const pivotBoost = Math.abs(this.speed) < 2.0 ? 1.2 : 0.8;
+    const targetTurnSpeed = steer * 1.2 * pivotBoost; // 1.2 rad/s max
     this.rotation += targetTurnSpeed * (ts / 1000);
     this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
     // 2. JOLT PHYSICS SYNC
-    // Ensure the body is active so it actually moves
     gfx3JoltManager.bodyInterface.ActivateBody(this.physicsBody.body.GetID());
 
-    // Forced rotation matching our arcade steering
-    const targetQuat = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
+    // Get physical orientation to match terrain slope
+    const qPhysics = this.physicsBody.body.GetRotation();
+    const currentQuat = new Quaternion(qPhysics.GetW(), qPhysics.GetX(), qPhysics.GetY(), qPhysics.GetZ());
+    
+    const m = currentQuat.toMatrix();
+    const physPitch = Math.asin(UT.CLAMP(-m[5], -1, 1));
+    const physRoll = Math.atan2(m[3], m[4]);
+
+    // Apply arcade yaw + physical tilt (dampened for stability)
+    const targetQuat = Quaternion.createFromEuler(this.rotation, physPitch, physRoll, 'YXZ');
     const joltQuatSet = new Gfx3Jolt.Quat(targetQuat.x, targetQuat.y, targetQuat.z, targetQuat.w);
     gfx3JoltManager.bodyInterface.SetRotation(this.physicsBody.body.GetID(), joltQuatSet, Gfx3Jolt.EActivation_Activate);
 
-    const qPhysics = this.physicsBody.body.GetRotation();
-    const currentQuat = new Quaternion(qPhysics.GetW(), qPhysics.GetX(), qPhysics.GetY(), qPhysics.GetZ());
-
-    // Velocity projection
+    // Precise Velocity
     const forward = targetQuat.rotateVector([0, 0, -1]);
-    const currentVel = this.physicsBody.body.GetLinearVelocity();
-    const verticalVel = currentVel.GetY();
+    const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
     
-    // projecting the intended arcade speed onto the physics body
+    // De-couple Y from horizontal movement for better gravity/slope interaction
     const newVelX = forward[0] * this.speed;
     const newVelZ = forward[2] * this.speed;
-    
-    // Vertical assist for slopes and keeping on ground
-    const verticalAssist = forward[1] * this.speed;
-    const newVelY = verticalVel * 0.9 + verticalAssist;
+    const verticalSlopeAssist = forward[1] * this.speed;
+    const newVelY = currentJoltVel.GetY() * 0.85 + verticalSlopeAssist;
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
         new Gfx3Jolt.Vec3(newVelX, newVelY, newVelZ)
     );
-
+    
     const pos = this.physicsBody.body.GetPosition();
     
     // 3. CHASSIS TILT (Acceleration-based lurch)

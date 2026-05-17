@@ -222,7 +222,7 @@ export class GameScreen extends Screen {
     if (inputManager.isPointerLockCaptured()) {
         const sensitivity = 0.003;
         this.cameraYaw -= data.movementX * sensitivity;
-        this.cameraPitch = Math.max(-0.4, Math.min(1.0, this.cameraPitch - data.movementY * sensitivity));
+        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - data.movementY * sensitivity));
         this.lastMouseManualTS = Date.now();
     }
   };
@@ -319,9 +319,7 @@ export class GameScreen extends Screen {
     const finalTargetDist = this.isSniperMode ? 8.0 : this.targetCameraDistance;
     this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
 
-    const cameraPitchActual = this.isSniperMode ? Math.max(this.cameraPitch, -0.1) : this.cameraPitch; 
-
-    const rotQ = Quaternion.createFromEuler(this.cameraYaw, cameraPitchActual, 0, 'YXZ');
+    const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
     const idealOffset = rotQ.rotateVector([0, 0, this.cameraDistance]);
     const idealPos: vec3 = [
         playerPos[0] + idealOffset[0],
@@ -334,26 +332,26 @@ export class GameScreen extends Screen {
         idealPos[1] = 1.0;
     }
     
-    // Position smoothing
-    const camAlpha = 1.0 - Math.exp(-6.0 * (ts / 1000));
+    // Position snapping (no tracking lag)
+    // To make movements feel smoother without lagging the aim, we only smooth the player pos tracking
+    // But direct aim is usually best for shooters.
+    const camAlpha = 1.0 - Math.exp(-25.0 * (ts / 1000));
     this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
     
-    // Look Target smoothing - Look slightly above the tank for better visibility
-    const noseOffset = rotQ.rotateVector([0, 0, -3.0]);
-    const lookGoal: vec3 = [
-        playerPos[0] + noseOffset[0],
-        playerPos[1] + 1.8 + (idealOffset[1] * 0.15), 
-        playerPos[2] + noseOffset[2]
+    // Look Target must exactly match the camera rotation to avoid aiming lag
+    const forwardVec = rotQ.rotateVector([0, 0, -1]);
+    this.cameraLookTarget = [
+        this.cameraPos[0] + forwardVec[0] * 10.0,
+        this.cameraPos[1] + forwardVec[1] * 10.0,
+        this.cameraPos[2] + forwardVec[2] * 10.0
     ];
-    const lookAlpha = 1.0 - Math.exp(-15.0 * (ts / 1000));
-    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, lookGoal, lookAlpha);
     
     const shakeX = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeY = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeZ = (Math.random() - 0.5) * this.shakeIntensity;
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
-    this.camera.lookAt(this.cameraLookTarget[0], this.cameraLookTarget[1], this.cameraLookTarget[2]);
+    this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));
   }

@@ -328,9 +328,11 @@ export class GameScreen extends Screen {
     
     // 1. Dynamic FOV based on speed
     const tankSpeed = Math.abs(this.tank.velocity);
-    this.targetFOV = this.isSniperMode ? 35 : (45 + (tankSpeed * 0.4));
-    this.currentFOV = UT.LERP(this.currentFOV, this.targetFOV, 0.05);
-    this.camera.setPerspectiveCustomRatio(this.currentFOV, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.targetFOV = this.isSniperMode ? 25 : (45 + (tankSpeed * 0.4));
+    this.currentFOV = UT.LERP(this.currentFOV, this.targetFOV, 1.0 - Math.exp(-10.0 * (ts / 1000)));
+    this.camera.setPerspectiveFovy(this.currentFOV * (Math.PI / 180));
+    this.camera.setPerspectiveNear(0.1);
+    this.camera.setPerspectiveFar(1000);
 
     // 2. Camera Distance & Snipping
     const finalTargetDist = this.isSniperMode ? 6.0 : this.targetCameraDistance;
@@ -402,9 +404,17 @@ export class GameScreen extends Screen {
     const shakeX = (Math.random() - 0.5) * finalShake;
     const shakeY = (Math.random() - 0.5) * finalShake;
     const shakeZ = (Math.random() - 0.5) * finalShake;
+
+    const rotShakeX = (Math.random() - 0.5) * finalShake * 0.5;
+    const rotShakeY = (Math.random() - 0.5) * finalShake * 0.5;
+    const rotShakeZ = (Math.random() - 0.5) * finalShake * 0.5;
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
-    this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
+    this.camera.lookAt(
+        this.cameraLookTarget[0] + shakeX + rotShakeX, 
+        this.cameraLookTarget[1] + shakeY + rotShakeY, 
+        this.cameraLookTarget[2] + shakeZ + rotShakeZ
+    );
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));
   }

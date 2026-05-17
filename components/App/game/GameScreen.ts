@@ -221,8 +221,8 @@ export class GameScreen extends Screen {
     
     if (inputManager.isPointerLockCaptured()) {
         const sensitivity = 0.003;
-        this.cameraYaw -= data.movementX * sensitivity;
-        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - data.movementY * sensitivity));
+        this.cameraYaw += data.movementX * sensitivity;
+        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch + data.movementY * sensitivity));
         this.lastMouseManualTS = Date.now();
     }
   };
@@ -259,6 +259,7 @@ export class GameScreen extends Screen {
     this.updateIntent(ts);
     this.level.update(ts);
 
+    // Tank visuals (MuZzle, etc.)
     const shots = this.tank.update(
         ts, 
         this.intent.moveDir, 

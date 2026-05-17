@@ -320,11 +320,35 @@ export class GameScreen extends Screen {
     this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
 
     const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
-    const idealOffset = rotQ.rotateVector([0, 0, this.cameraDistance]);
+    const idealOffsetFull = rotQ.rotateVector([0, 0, this.cameraDistance]);
+    
+    const rayStart: vec3 = [
+        playerPos[0],
+        playerPos[1] + 1.5,
+        playerPos[2]
+    ];
+    
+    const rayEnd: vec3 = [
+        rayStart[0] + idealOffsetFull[0],
+        rayStart[1] + idealOffsetFull[1],
+        rayStart[2] + idealOffsetFull[2]
+    ];
+
+    // Raycast from player to camera to prevent clipping
+    const rc = gfx3JoltManager.createRay(rayStart[0], rayStart[1], rayStart[2], rayEnd[0], rayEnd[1], rayEnd[2]);
+    let safeFraction = 1.0;
+    
+    // If we hit something and it's not the player's tank itself
+    if (rc.fraction < 1.0 && rc.body && rc.body.GetID().GetIndex() !== this.tank.physicsBody.bodyId) {
+        // pad by absolute units to keep near plane out of wall
+        const paddingFraction = 1.2 / Math.max(1.0, this.cameraDistance);
+        safeFraction = Math.max(0.01, rc.fraction - paddingFraction); 
+    }
+
     const idealPos: vec3 = [
-        playerPos[0] + idealOffset[0],
-        playerPos[1] + idealOffset[1] + 1.5,
-        playerPos[2] + idealOffset[2]
+        rayStart[0] + idealOffsetFull[0] * safeFraction,
+        rayStart[1] + idealOffsetFull[1] * safeFraction,
+        rayStart[2] + idealOffsetFull[2] * safeFraction
     ];
     
     // Prevent camera from going under ground
@@ -339,6 +363,7 @@ export class GameScreen extends Screen {
     this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
     
     // Look Target must exactly match the camera rotation to avoid aiming lag
+    // We look along the camera's negative Z relative to its final position
     const forwardVec = rotQ.rotateVector([0, 0, -1]);
     this.cameraLookTarget = [
         this.cameraPos[0] + forwardVec[0] * 10.0,

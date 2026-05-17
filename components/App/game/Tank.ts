@@ -172,9 +172,9 @@ export class Tank {
     const newAngY = UT.LERP(currentAngVel.GetY(), targetAngularVelY, 1.0 - Math.exp(-rotationFixAlpha * (ts / 1000)));
     
     // Dampen physical bouncy rotation, apply gentle righting force if on flat ground
-    const rightingStrength = Math.max(0, 1.0 - Math.abs(this.velocity) / 40.0) * 12.0;
-    const newAngX = currentAngVel.GetX() * 0.6 + tiltErrorX * rightingStrength;
-    const newAngZ = currentAngVel.GetZ() * 0.6 + tiltErrorZ * rightingStrength;
+    const rightingStrength = 10.0;
+    const newAngX = currentAngVel.GetX() * 0.8 + tiltErrorX * rightingStrength;
+    const newAngZ = currentAngVel.GetZ() * 0.8 + tiltErrorZ * rightingStrength;
 
     gfx3JoltManager.bodyInterface.SetAngularVelocity(
         this.physicsBody.body.GetID(), 
@@ -185,15 +185,20 @@ export class Tank {
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
     const forward = currentQuat.rotateVector([0, 0, -1]); // Chassis forward vector (includes pitch)
     
-    // Project speed onto chassis forward
-    // On flat ground forward.y is ~0. On slopes it helps climb.
-    const newVelX = forward[0] * this.velocity;
-    const newVelZ = forward[2] * this.velocity;
+    // Project forward strictly onto XZ plane for arcade movement
+    const xzLen = Math.sqrt(forward[0]*forward[0] + forward[2]*forward[2]);
+    let dirX = forward[0];
+    let dirZ = forward[2];
+    if (xzLen > 0.001) {
+        dirX /= xzLen;
+        dirZ /= xzLen;
+    }
     
-    // Allow physics to handle vertical motion but add a slight "climb" assist boost from the engine speed
-    // This ensures the tank doesn't just stop at ramps.
-    const verticalAssist = forward[1] * this.velocity;
-    const newVelY = currentJoltVel.GetY() * (Math.abs(verticalAssist) > 0.1 ? 0.5 : 1.0) + verticalAssist;
+    const newVelX = dirX * this.velocity;
+    const newVelZ = dirZ * this.velocity;
+    
+    // Completely preserve Jolt's Y velocity for gravity and ramp collisions
+    const newVelY = currentJoltVel.GetY();
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
@@ -263,7 +268,7 @@ export class Tank {
     const targetPitch = Math.max(maxDepress, Math.min(maxElevate, aimPitch));
     this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 4.0 * (ts / 1000));
     
-    const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
+    const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
     const barrelRecoilVis = Math.max(this.shellRecoil * 1.2, this.grenadeRecoil * 0.5);
     const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1, -1.2 + barrelRecoilVis));

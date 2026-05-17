@@ -82,13 +82,10 @@ export class GameScreen extends Screen {
   
   cameraYaw = 0; 
   cameraPitch = 0.45;
-  visualCameraYaw = 0;
-  visualCameraPitch = 0.45;
   cameraDistance = 18;
   cameraOffset: vec3 = [0, 6, 12]; 
   cameraLookTarget: vec3 = [0, 0, 0];
   cameraPos: vec3 = [0, 0, 0];
-  cameraPivot: vec3 = [0, 0, 0];
 
   isReady: boolean = false;
   rightClickFire: boolean = false;
@@ -96,7 +93,6 @@ export class GameScreen extends Screen {
   mouseY: number = 0;
   shakeIntensity: number = 0;
   lastMouseManualTS: number = 0;
-  cameraSafeFraction: number = 1.0;
 
   constructor() {
     super();
@@ -150,16 +146,12 @@ export class GameScreen extends Screen {
   cameraAlpha: number = 0.1;
   isSniperMode: boolean = false;
   targetCameraDistance: number = 28.0;
-  currentFOV: number = 45;
-  targetFOV: number = 45;
-  cameraRecoil: number = 0;
-  shoulderOffset: number = 0;
 
   handleGlobalWheel = (e: WheelEvent) => {
     if (inputManager.isPointerLockCaptured()) {
        const step = 4.0;
        this.targetCameraDistance += e.deltaY > 0 ? step : -step;
-       this.targetCameraDistance = Math.max(8, Math.min(60, this.targetCameraDistance));
+       this.targetCameraDistance = Math.max(10, Math.min(60, this.targetCameraDistance));
     }
   };
 
@@ -228,10 +220,9 @@ export class GameScreen extends Screen {
     this.mouseY = data.clientY;
     
     if (inputManager.isPointerLockCaptured()) {
-        const baseSensitivity = 0.003;
-        const sensitivity = this.isSniperMode ? baseSensitivity * 0.4 : baseSensitivity;
+        const sensitivity = 0.003;
         this.cameraYaw -= data.movementX * sensitivity;
-        this.cameraPitch = Math.max(-1.2, Math.min(1.0, this.cameraPitch - data.movementY * sensitivity));
+        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - data.movementY * sensitivity));
         this.lastMouseManualTS = Date.now();
     }
   };
@@ -281,13 +272,11 @@ export class GameScreen extends Screen {
        this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player');
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.SHELL);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.3);
-       this.cameraRecoil = Math.max(this.cameraRecoil, 0.4);
     }
     if (shots.grenade) {
        this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player');
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.GRENADE);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.6);
-       this.cameraRecoil = Math.max(this.cameraRecoil, 1.2);
     }
 
     const tankP = this.tank.physicsBody.body.GetPosition();
@@ -327,69 +316,18 @@ export class GameScreen extends Screen {
     }
 
 
-    // --- CAMERA LOGIC IMPROVEMENTS ---
+    const finalTargetDist = this.isSniperMode ? 8.0 : this.targetCameraDistance;
+    this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
+
+    // ARCADE CHASE CAMERA (FROM SKILL.MD)
+    const tankQuat = Quaternion.createFromEuler(this.tank.rotation, 0, 0, 'YXZ');
+    const tankForward = tankQuat.rotateVector([0, 0, -1]);
     
-    // 1. Dynamic FOV based on speed
-    const tankSpeed = Math.abs(this.tank.velocity);
-    const speedRatio = tankSpeed / this.tank.maxSpeed;
-    this.targetFOV = this.isSniperMode ? 20 : (48 + (speedRatio * 15.0));
-    this.currentFOV = UT.LERP(this.currentFOV, this.targetFOV, 1.0 - Math.exp(-8.0 * (ts / 1000)));
-    this.camera.setPerspectiveFovy(this.currentFOV * (Math.PI / 180));
-    this.camera.setPerspectiveNear(0.1);
-    this.camera.setPerspectiveFar(1500);
-
-    // 2. Camera Distance & Snipping
-    const speedDistanceExtra = speedRatio * 4.0;
-    const finalTargetDist = this.isSniperMode ? 5.5 : (this.targetCameraDistance + speedDistanceExtra);
-    this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-6.0 * (ts / 1000)));
-
-    // 3. Shoulder Offset (Slight shift for more modern look)
-    const targetShoulderOffset = this.isSniperMode ? 0.0 : (this.intent.moveDir.x * 2.5);
-    this.shoulderOffset = UT.LERP(this.shoulderOffset, targetShoulderOffset, 1.0 - Math.exp(-5.0 * (ts / 1000)));
-
-    // 1. Smooth Camera Rotation (Cinema feel)
-    this.visualCameraYaw = UT.LERP(this.visualCameraYaw, this.cameraYaw, 1.0 - Math.exp(-15.0 * (ts / 1000)));
-    this.visualCameraPitch = UT.LERP(this.visualCameraPitch, this.cameraPitch, 1.0 - Math.exp(-15.0 * (ts / 1000)));
-
-    const rotQ = Quaternion.createFromEuler(this.visualCameraYaw, this.visualCameraPitch, 0, 'YXZ');
-    
-    // Add recoil to the camera distance temporarily
-    const visualDistance = this.cameraDistance + this.cameraRecoil;
-    this.cameraRecoil = UT.LERP(this.cameraRecoil, 0, 1.0 - Math.exp(-20.0 * (ts / 1000)));
-
-    const targetPivotDirect: vec3 = [
-        playerPos[0],
-        playerPos[1] + 1.8,
-        playerPos[2]
-    ];
-    // pivot tracking is secondary, just for micro-smoothing player movement
-    this.cameraPivot = UT.VEC3_LERP(this.cameraPivot, targetPivotDirect, 1.0 - Math.exp(-40.0 * (ts / 1000)));
-
-    const idealOffsetLocal = [this.shoulderOffset, 0, visualDistance];
-    const idealOffsetWorld = rotQ.rotateVector(idealOffsetLocal);
-    
-    const rayStart: vec3 = this.cameraPivot;
-    const rayEnd: vec3 = [
-        rayStart[0] + idealOffsetWorld[0],
-        rayStart[1] + idealOffsetWorld[1],
-        rayStart[2] + idealOffsetWorld[2]
-    ];
-
-    // Raycast from player to camera to prevent clipping (Spring Arm)
-    const rc = gfx3JoltManager.createRay(rayStart[0], rayStart[1], rayStart[2], rayEnd[0], rayEnd[1], rayEnd[2]);
-    let targetSafeFraction = 1.0;
-    
-    // If we hit something and it's not the player's tank itself
-    if (rc.fraction < 1.0 && rc.body && rc.body.GetID().GetIndex() !== this.tank.physicsBody.bodyId) {
-        targetSafeFraction = Math.max(0.01, rc.fraction - 0.1); 
-    }
-
-    this.cameraSafeFraction = UT.LERP(this.cameraSafeFraction, targetSafeFraction, 1.0 - Math.exp(-15.0 * (ts / 1000)));
-
+    // Actually, following the skill strictly:
     const idealPos: vec3 = [
-        rayStart[0] + idealOffsetWorld[0] * this.cameraSafeFraction,
-        rayStart[1] + idealOffsetWorld[1] * this.cameraSafeFraction,
-        rayStart[2] + idealOffsetWorld[2] * this.cameraSafeFraction
+        playerPos[0] - tankForward[0] * this.cameraDistance,
+        playerPos[1] + 6.0,
+        playerPos[2] - tankForward[2] * this.cameraDistance
     ];
     
     // Prevent camera from going under ground
@@ -397,37 +335,19 @@ export class GameScreen extends Screen {
         idealPos[1] = 1.0;
     }
     
-    // Position smoothing - with lower coefficient to simulate weight/inertia
-    const camAlpha = 1.0 - Math.exp(-8.0 * (ts / 1000));
+    // Position Smoothing (Chase LERP)
+    const camAlpha = 1.0 - Math.exp(-6.0 * (ts / 1000));
     this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
     
-    // Look Target exactly matches camera look direction
-    const forwardVec = rotQ.rotateVector([0, 0, -1]);
-    const leadAmount = this.isSniperMode ? 40.0 : (12.0 + tankSpeed * 0.3);
-    this.cameraLookTarget = [
-        this.cameraPos[0] + forwardVec[0] * leadAmount,
-        this.cameraPos[1] + forwardVec[1] * leadAmount,
-        this.cameraPos[2] + forwardVec[2] * leadAmount
-    ];
-    
-    const speedShake = speedRatio * 0.04;
-    const finalIntensity = this.shakeIntensity + speedShake;
-    
-    // Use smoothed noise-like sine waves for shake
-    const shakeTime = Date.now() * 0.05;
-    const shakeX = Math.sin(shakeTime * 0.9) * finalIntensity * 0.4;
-    const shakeY = Math.cos(shakeTime * 1.0) * finalIntensity * 0.4;
-    const shakeZ = Math.sin(shakeTime * 0.7) * finalIntensity * 0.15;
-
-    const rotShakeX = Math.sin(shakeTime * 1.2) * finalIntensity * 0.08;
-    const rotShakeY = Math.cos(shakeTime * 1.1) * finalIntensity * 0.08;
+    // Shake applied before LookAt
+    const shakeX = (Math.random() - 0.5) * this.shakeIntensity;
+    const shakeY = (Math.random() - 0.5) * this.shakeIntensity;
+    const shakeZ = (Math.random() - 0.5) * this.shakeIntensity;
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
-    this.camera.lookAt(
-        this.cameraLookTarget[0] + shakeX + rotShakeX, 
-        this.cameraLookTarget[1] + shakeY + rotShakeY, 
-        this.cameraLookTarget[2] + shakeZ
-    );
+    
+    // Focus on the tank center (slightly elevated)
+    this.camera.lookAt(playerPos[0] + shakeX, playerPos[1] + 2.0 + shakeY, playerPos[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));
   }
@@ -447,10 +367,10 @@ export class GameScreen extends Screen {
 
     const camPos = this.camera.getPosition();
     this.level.draw(camPos);
-    this.tank.draw(this.visualCameraYaw);
+    this.tank.draw(this.cameraYaw);
     
     for (const enemy of this.enemies) {
-       enemy.draw(this.visualCameraYaw);
+       enemy.draw(this.cameraYaw);
     }
     for (const exp of this.explosions) {
        exp.draw();

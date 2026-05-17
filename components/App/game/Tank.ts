@@ -26,19 +26,37 @@ export class Tank {
   antenna: Gfx3Mesh;
   physicsBody: any;
   velocity: number = 0;
-  maxSpeed: number = 24.0;
+  speed: number = 0;
+  sens: number = 0;
+  newSens: number = 0;
+  wheelAngle: number = 0;
   rotation: number = 0;
   shellRecoil: number = 0;
   grenadeRecoil: number = 0;
   turretYaw: number = 0;
-  turretYawVel: number = 0;
   barrelPitch: number = 0;
-  chassisTiltX: number = 0;
-  chassisTiltZ: number = 0;
+  chassisTilt: number = 0;
   wasFiringInternal: boolean = false;
   currentUp: vec3 = [0, 1, 0];
   hp: number = 100;
   recoil: number = 0;
+
+  options = {
+    accelerationSpeed: 600.0,
+    maxSpeed: 45.0,
+    minSpeed: 0.1,
+    boostAtStart: 3.5,
+    brakeFriction: 12.0,
+    engineBrakeFriction: 2.0,
+    steerSpeed: 3.0,
+    maxTurn: 0.6,
+    quickFactor: 4.5,
+    swiftnessMap: [
+      { mapBegin: 1.0, mapEnd: 1.0, valueMin: 0, valueMax: 10 },
+      { mapBegin: 1.0, mapEnd: 0.6, valueMin: 10, valueMax: 30 },
+      { mapBegin: 0.6, mapEnd: 0.2, valueMin: 30, valueMax: 60 }
+    ]
+  };
 
   static initHPMeshes() {
     if (Tank.hpInit) return;
@@ -105,10 +123,6 @@ export class Tank {
    * Updates physics and syncs mesh transforms.
    */
   update(ts: number, moveDir: { x: number, y: number }, fireNormal: boolean, fireGrenade: boolean, aimYaw: number = 0, aimPitch: number = 0): { normal: boolean, grenade: boolean, muzzlePos: vec3, muzzleDir: vec3 } {
-    const moveSpeed = this.maxSpeed;
-    const reverseSpeed = moveSpeed * 0.5;
-    const rotSpeed = 110 * (Math.PI / 180); // 110 deg/sec
-
     let didShootNormal = false;
     let didShootGrenade = false;
 
@@ -130,81 +144,76 @@ export class Tank {
     this.grenadeRecoil -= (ts / 1000) * 1.5;
     if (this.grenadeRecoil < 0) this.grenadeRecoil = 0;
     
-    // 1. CHASSIS MOVEMENT
-    let targetVelocity = 0;
-    let targetAngularVelY = 0;
+    // 1. ARCADE MOVEMENT LOGIC (AS PER SKILL.MD)
+    const throttle = (Math.abs(moveDir.y) < 0.05) ? 0 : moveDir.y;
+    const steer = (Math.abs(moveDir.x) < 0.05) ? 0 : moveDir.x;
 
+    // A. SENSITIVITY & DIRECTION
+    if (throttle > 0) {
+        this.newSens = 1;
+        this.sens = this.sens === 0 ? 1 : this.sens;
+    } else if (throttle < 0) {
+        this.newSens = -1;
+        this.sens = this.sens === 0 ? -1 : this.sens;
+    } else {
+        this.newSens = 0;
+    }
+
+    if (this.speed <= this.options.minSpeed && this.newSens === 0) {
+        this.sens = 0;
+    }
+
+    // B. ACCELERATION
+    if (this.sens !== 0 && this.newSens === 0) {
+      // Engine brake
+      this.speed -= this.speed * this.options.engineBrakeFriction * (ts / 1000);
+    } else if (this.sens !== 0 && this.newSens === this.sens) {
+      // Normal acceleration
+      this.speed += this.options.accelerationSpeed * (ts / 1000);
+    } else if (this.sens !== 0 && this.newSens !== this.sens) {
+      // Braking
+      this.speed -= this.speed * this.options.brakeFriction * (ts / 1000);
+    }
+
+    this.speed = UT.CLAMP(this.speed, 0, this.options.maxSpeed);
+    this.speed = UT.DEADZONE(this.speed, this.options.minSpeed);
+
+    // C. WHEEL ANGLE (STEERING RACK)
+    if (steer < 0) {
+        this.wheelAngle -= this.options.steerSpeed * (ts / 1000);
+    } else if (steer > 0) {
+        this.wheelAngle += this.options.steerSpeed * (ts / 1000);
+    } else {
+        this.wheelAngle = UT.DEADZONE(this.wheelAngle - (this.wheelAngle * 5.0 * (ts / 1000)));
+    }
+    this.wheelAngle = UT.CLAMP(this.wheelAngle, -this.options.maxTurn, this.options.maxTurn);
+
+    // D. DIRECTION ANGLE (VEHICLE ROTATION)
+    const rotationFactor = UT.MAP_VALUE_FROM_CURVE(this.speed, this.options.swiftnessMap);
+    const adherence = 1.0; // Simplification for Jolt version
+    this.rotation += adherence * this.sens * this.wheelAngle * this.options.quickFactor * rotationFactor * (ts / 1000);
+    this.rotation = UT.CLAMP_ANGLE(this.rotation);
+
+    // 2. JOLT PHYSICS SYNC
     const qPhysics = this.physicsBody.body.GetRotation();
     const currentQuat = new Quaternion(qPhysics.GetW(), qPhysics.GetX(), qPhysics.GetY(), qPhysics.GetZ());
-    const currentForward = currentQuat.rotateVector([0, 0, -1]);
-    const currentYaw = Math.atan2(-currentForward[0], -currentForward[2]);
-    this.rotation = currentYaw; // Sync for other reads
-
-    const throttle = (Math.abs(moveDir.y) < 0.05) ? 0 : moveDir.y;
-    let turnInput = (Math.abs(moveDir.x) < 0.05) ? 0 : moveDir.x; // Strict deadzone to prevent veering
-
-    // Standard tank controls: A/D rotates the chassis always in the same direction relative to front
-    // But we maintain the inversion for backward movement as it's more intuitive for most players (car style)
-    if (throttle < 0) {
-        turnInput = -turnInput;
-    }
-
-    targetVelocity = throttle > 0 ? throttle * moveSpeed : throttle * reverseSpeed;
-    targetAngularVelY = -turnInput * (rotSpeed * (throttle !== 0 ? 1.0 : 1.4)); // Buff turn-in-place speed
-
-    // Heavy physical braking & acceleration feel
-    const isBraking = (throttle === 0 && Math.abs(this.velocity) > 0.1) || (throttle > 0 && this.velocity < -0.1) || (throttle < 0 && this.velocity > 0.1);
-    const accelRate = throttle !== 0 ? (isBraking ? -8.0 : -3.5) : -4.0;
-    const accelAlphaValue = 1.0 - Math.exp(accelRate * (ts / 1000));
-    this.velocity = UT.LERP(this.velocity, targetVelocity, accelAlphaValue);
-
-    const currentUpVec = currentQuat.rotateVector([0, 1, 0]);
     
-    // 2. CHASSIS TILT (Acceleration-based lurch)
-    const acceleration = (targetVelocity - this.velocity);
-    const targetTiltX = -acceleration * 0.18 * (Math.PI / 180); // Longitudinal lurch
-    const targetTiltZ = -turnInput * Math.abs(this.velocity) * 0.08 * (Math.PI / 180); // Lateral lurch
-    
-    this.chassisTiltX = UT.LERP(this.chassisTiltX || 0, targetTiltX, 8.0 * (ts / 1000));
-    this.chassisTiltZ = UT.LERP(this.chassisTiltZ || 0, targetTiltZ, 4.0 * (ts / 1000));
-    
-    // Softly upright the tank visual-only tilt
-    const tiltErrorX = -currentUpVec[2]; 
-    const tiltErrorZ = currentUpVec[0];  
+    // Forced rotation matching our arcade steering
+    const targetQuat = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
+    const joltQuatSet = new Gfx3Jolt.Quat(targetQuat.x, targetQuat.y, targetQuat.z, targetQuat.w);
+    gfx3JoltManager.bodyInterface.SetRotation(this.physicsBody.body.GetID(), joltQuatSet, Gfx3Jolt.EActivation_Activate);
 
-    const currentAngVel = this.physicsBody.body.GetAngularVelocity();
-    // Faster interpolation for better snap-to-command
-    const rotationFixAlpha = throttle !== 0 ? 15.0 : 20.0;
-    const newAngY = UT.LERP(currentAngVel.GetY(), targetAngularVelY, 1.0 - Math.exp(-rotationFixAlpha * (ts / 1000)));
+    // Velocity projection
+    const forward = targetQuat.rotateVector([0, 0, -1]);
+    const verticalVel = this.physicsBody.body.GetLinearVelocity().GetY();
     
-    // Dampen physical bouncy rotation, apply gentle righting force if on flat ground
-    const rightingStrength = 10.0;
-    const newAngX = currentAngVel.GetX() * 0.8 + tiltErrorX * rightingStrength;
-    const newAngZ = currentAngVel.GetZ() * 0.8 + tiltErrorZ * rightingStrength;
-
-    gfx3JoltManager.bodyInterface.SetAngularVelocity(
-        this.physicsBody.body.GetID(), 
-        new Gfx3Jolt.Vec3(newAngX, newAngY, newAngZ)
-    );
-
-    // 3. STRICT LINEAR VELOCITY (Follow chassis forward)
-    const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
-    const forward = currentQuat.rotateVector([0, 0, -1]); // Chassis forward vector (includes pitch)
+    // projecting the intended arcade speed onto the physics body
+    const newVelX = forward[0] * this.speed * this.sens;
+    const newVelZ = forward[2] * this.speed * this.sens;
     
-    // Project forward strictly onto XZ plane for arcade movement
-    const xzLen = Math.sqrt(forward[0]*forward[0] + forward[2]*forward[2]);
-    let dirX = forward[0];
-    let dirZ = forward[2];
-    if (xzLen > 0.001) {
-        dirX /= xzLen;
-        dirZ /= xzLen;
-    }
-    
-    const newVelX = dirX * this.velocity;
-    const newVelZ = dirZ * this.velocity;
-    
-    // Completely preserve Jolt's Y velocity for gravity and ramp collisions
-    const newVelY = currentJoltVel.GetY();
+    // Vertical assist for slopes
+    const verticalAssist = forward[1] * this.speed * this.sens;
+    const newVelY = verticalVel * 0.8 + verticalAssist;
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
@@ -212,6 +221,13 @@ export class Tank {
     );
 
     const pos = this.physicsBody.body.GetPosition();
+    
+    // 3. CHASSIS TILT (Acceleration-based lurch)
+    const acceleration = (this.speed - this.velocity); // Using velocity as old speed for tilt calc
+    this.velocity = this.speed; // Sync velocity for next frame
+    
+    const targetTilt = -acceleration * 0.12 * (Math.PI / 180); 
+    this.chassisTilt = UT.LERP(this.chassisTilt, targetTilt, 5.0 * (ts / 1000));
     
     // Teleport if out of bounds
     if (pos.GetY() < -20.0) {
@@ -227,7 +243,7 @@ export class Tank {
     const recoilImpact = this.recoil > 0 ? Math.sin(Date.now() * 0.1) * this.recoil * 0.02 : 0;
     const bodyRecoilOffset = this.recoil > 0 ? this.recoil * -0.2 : 0; // Push back effect
     const recoilQ = Quaternion.createFromEuler(0, recoilImpact, 0, 'YXZ');
-    const tiltQ = Quaternion.createFromEuler(this.chassisTiltX, 0, this.chassisTiltZ, 'YXZ');
+    const tiltQ = Quaternion.createFromEuler(this.chassisTilt, 0, 0, 'YXZ');
     
     // Apply tilt THEN recoil
     const finalVisualQ = currentQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z).mul(recoilQ.w, recoilQ.x, recoilQ.y, recoilQ.z);
@@ -257,13 +273,11 @@ export class Tank {
     let yawDiff = ((aimYaw - this.turretYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
     
-    // Traverse feel - Heavy and mechanical acceleration
-    const targetYawVel = yawDiff * 6.0; // Proportional control
-    const traverseAccel = 20.0;
-    this.turretYawVel = UT.LERP(this.turretYawVel, targetYawVel, 1.0 - Math.exp(-traverseAccel * (ts / 1000)));
-    this.turretYaw += this.turretYawVel * (ts / 1000);
+    // Traverse feel - Heavy and mechanical
+    const turretTraverseSpeed = 2.5;
+    this.turretYaw += yawDiff * turretTraverseSpeed * (ts / 1000);
     
-    const localYaw = (this.turretYaw - currentYaw);
+    const localYaw = (this.turretYaw - this.rotation);
     const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85, 0));
@@ -276,7 +290,7 @@ export class Tank {
     const targetPitch = Math.max(maxDepress, Math.min(maxElevate, aimPitch));
     this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 4.0 * (ts / 1000));
     
-    const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
+    const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
 
     const barrelRecoilVis = Math.max(this.shellRecoil * 1.2, this.grenadeRecoil * 0.5);
     const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1, -1.2 + barrelRecoilVis));

@@ -298,109 +298,92 @@ const App = () => {
                 )}
             </AnimatePresence>
 
-            {/* HUD BENTO GRID */}
+            {/* TOP BAR */}
             <div style={{
                 position: 'absolute',
                 top: Tokens.spacing.lg,
                 left: Tokens.spacing.lg,
                 right: Tokens.spacing.lg,
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
-                gap: Tokens.spacing.sm,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
             }}>
-                {/* Brand Block */}
-                <div style={{
-                    gridColumn: isMobile ? 'span 1' : 'span 2',
-                    backgroundColor: Tokens.colors.surface,
-                    padding: Tokens.spacing.md,
-                    borderRadius: Tokens.radius.md,
-                    backdropFilter: 'blur(10px)',
-                    border: `1px solid ${Tokens.colors.border}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center'
-                }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: Tokens.spacing.sm }}>
                     <h1 style={{
                         margin: 0,
-                        fontSize: isMobile ? '24px' : '40px',
+                        fontSize: isMobile ? '32px' : '48px',
                         fontFamily: Tokens.fonts.hero,
                         color: Tokens.colors.content,
+                        lineHeight: 1,
                         letterSpacing: '2px',
-                        lineHeight: 1
+                        textShadow: '0 2px 10px rgba(0,0,0,0.5)'
                     }}>ARCADE_GPU</h1>
-                    <div style={{ color: Tokens.colors.accent, fontSize: '10px', fontFamily: Tokens.fonts.data, letterSpacing: '4px', marginTop: '4px' }}>VEHICULAR_COMBAT_OS</div>
-                </div>
-
-                {/* Health Block */}
-                <div style={{
-                    backgroundColor: Tokens.colors.surface,
-                    padding: Tokens.spacing.md,
-                    borderRadius: Tokens.radius.md,
-                    backdropFilter: 'blur(10px)',
-                    border: `1px solid ${Tokens.colors.border}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between'
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ color: Tokens.colors.contentDim, fontSize: '10px', fontFamily: Tokens.fonts.data }}>HW_INTEGRITY</span>
-                        <span style={{ color: playerHp > 30 ? Tokens.colors.content : Tokens.colors.accent, fontSize: '16px', fontFamily: Tokens.fonts.data }}>{Math.max(0, Math.floor(playerHp))}%</span>
-                    </div>
-                    <div style={{ width: '100%', height: '4px', backgroundColor: Tokens.colors.surfaceLight, borderRadius: '2px', overflow: 'hidden', marginTop: '8px' }}>
-                        <motion.div 
-                            animate={{ width: `${Math.max(0, Math.min(100, playerHp))}%` }}
-                            style={{ height: '100%', backgroundColor: playerHp > 30 ? '#39FF14' : Tokens.colors.accent }} 
-                        />
+                    <div style={{ display: 'flex', gap: Tokens.spacing.sm }}>
+                        <StatBlock label="Enemies" value={enemyCount} icon={Crosshair} />
                     </div>
                 </div>
 
-                {/* Stats Block */}
-                <div style={{
-                    backgroundColor: Tokens.colors.surface,
-                    padding: Tokens.spacing.md,
-                    borderRadius: Tokens.radius.md,
-                    backdropFilter: 'blur(10px)',
-                    border: `1px solid ${Tokens.colors.border}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between'
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ color: Tokens.colors.contentDim, fontSize: '10px', fontFamily: Tokens.fonts.data }}>TGT_COUNT</span>
-                        <Crosshair size={16} color={Tokens.colors.accent} />
-                    </div>
-                    <span style={{ color: Tokens.colors.content, fontSize: '24px', fontFamily: Tokens.fonts.data }}>{enemyCount}</span>
-                </div>
-            </div>
-
-            {/* CONTROLS HINT (Top Right) */}
-            <AnimatePresence>
-                {!isMobile && isDesktop && (
-                    <motion.div 
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        style={{
-                            position: 'absolute',
-                            top: Tokens.spacing.lg,
-                            right: Tokens.spacing.lg,
-                            marginTop: '100px', // Below the bento bar
+                <div style={{ display: 'flex', flexDirection: 'column', gap: Tokens.spacing.sm, pointerEvents: 'auto' }}>
+                    {isDesktop && (
+                        <div style={{
                             backgroundColor: Tokens.colors.surface,
                             padding: Tokens.spacing.md,
+                            color: Tokens.colors.contentDim,
+                            textAlign: 'right',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            minWidth: '220px',
+                            border: `1px solid ${Tokens.colors.border}`,
                             borderRadius: Tokens.radius.md,
                             backdropFilter: 'blur(10px)',
-                            border: `1px solid ${Tokens.colors.border}`,
-                            width: '200px',
-                            pointerEvents: 'auto'
-                        }}
-                    >
-                        <div style={{ fontSize: '10px', fontFamily: Tokens.fonts.data, color: Tokens.colors.contentDim, marginBottom: '8px', borderBottom: `1px solid ${Tokens.colors.border}`, paddingBottom: '4px' }}>INPUT_MAPPING</div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: Tokens.fonts.data, color: Tokens.colors.content }}><span>THRUST</span><span>WASD</span></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: Tokens.fonts.data, color: Tokens.colors.content }}><span>TURRET</span><span>MOUSE</span></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: Tokens.fonts.data, color: Tokens.colors.content }}><span>PRIMARY</span><span>LMB</span></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: Tokens.fonts.data, color: Tokens.colors.content }}><span>SNIPER</span><span>RMB</span></div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                        }}>
+                            <div style={{ fontSize: '10px', fontFamily: Tokens.fonts.body, letterSpacing: '1px', textTransform: 'uppercase', textAlign: 'left', marginBottom: '8px' }}>Control Schema</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontFamily: Tokens.fonts.data }}><span>MOVE</span><span>WASD / ARROWS</span></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontFamily: Tokens.fonts.data }}><span>LOOK / AIM</span><span>MOUSE</span></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontFamily: Tokens.fonts.data }}><span>FIRE</span><span>L-CLICK / SPACE</span></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontFamily: Tokens.fonts.data }}><span>GRENADE</span><span>R-CLICK / SHIFT / G</span></div>
+                        </div>
+                    )}
+                    
+                    <div style={{
+                        backgroundColor: Tokens.colors.surface,
+                        padding: Tokens.spacing.md,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: Tokens.spacing.sm,
+                        minWidth: '220px',
+                        border: `1px solid ${Tokens.colors.border}`,
+                        borderRadius: Tokens.radius.md,
+                        backdropFilter: 'blur(10px)',
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: Tokens.colors.contentDim, fontSize: '10px', fontFamily: Tokens.fonts.body, letterSpacing: '1px', textTransform: 'uppercase' }}>COMBAT POINTS</span>
+                            <span style={{ color: Tokens.colors.content, fontSize: '18px', fontFamily: Tokens.fonts.data, fontWeight: 600 }}>000000</span>
+                        </div>
+                    </div>
+                    
+                    <div style={{
+                        backgroundColor: Tokens.colors.surface,
+                        padding: Tokens.spacing.md,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: Tokens.spacing.sm,
+                        minWidth: '220px',
+                        border: `1px solid ${Tokens.colors.border}`,
+                        borderRadius: Tokens.radius.md,
+                        backdropFilter: 'blur(10px)',
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: Tokens.colors.contentDim, fontSize: '10px', fontFamily: Tokens.fonts.body, letterSpacing: '1px', textTransform: 'uppercase' }}>HEALTH BAR</span>
+                            <span style={{ color: Tokens.colors.content, fontSize: '12px', fontFamily: Tokens.fonts.data, fontWeight: 600 }}>{Math.max(0, Math.floor(playerHp))}%</span>
+                        </div>
+                        <div style={{ width: '100%', height: '2px', backgroundColor: Tokens.colors.surfaceLight, position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${Math.max(0, Math.min(100, playerHp))}%`, backgroundColor: '#39FF14', boxShadow: '0 0 8px rgba(57, 255, 20, 0.5)' }} />
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {/* RETICLE */}
             <div style={{

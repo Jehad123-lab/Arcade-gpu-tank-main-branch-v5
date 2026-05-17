@@ -26,12 +26,15 @@ export class Tank {
   antenna: Gfx3Mesh;
   physicsBody: any;
   velocity: number = 0;
+  maxSpeed: number = 24.0;
   rotation: number = 0;
   shellRecoil: number = 0;
   grenadeRecoil: number = 0;
   turretYaw: number = 0;
+  turretYawVel: number = 0;
   barrelPitch: number = 0;
-  chassisTilt: number = 0;
+  chassisTiltX: number = 0;
+  chassisTiltZ: number = 0;
   wasFiringInternal: boolean = false;
   currentUp: vec3 = [0, 1, 0];
   hp: number = 100;
@@ -102,8 +105,8 @@ export class Tank {
    * Updates physics and syncs mesh transforms.
    */
   update(ts: number, moveDir: { x: number, y: number }, fireNormal: boolean, fireGrenade: boolean, aimYaw: number = 0, aimPitch: number = 0): { normal: boolean, grenade: boolean, muzzlePos: vec3, muzzleDir: vec3 } {
-    const moveSpeed = 24.0;
-    const reverseSpeed = 12.0;
+    const moveSpeed = this.maxSpeed;
+    const reverseSpeed = moveSpeed * 0.5;
     const rotSpeed = 110 * (Math.PI / 180); // 110 deg/sec
 
     let didShootNormal = false;
@@ -151,7 +154,7 @@ export class Tank {
 
     // Heavy physical braking & acceleration feel
     const isBraking = (throttle === 0 && Math.abs(this.velocity) > 0.1) || (throttle > 0 && this.velocity < -0.1) || (throttle < 0 && this.velocity > 0.1);
-    const accelRate = throttle !== 0 ? (isBraking ? -15.0 : -6.0) : -8.0;
+    const accelRate = throttle !== 0 ? (isBraking ? -8.0 : -3.5) : -4.0;
     const accelAlphaValue = 1.0 - Math.exp(accelRate * (ts / 1000));
     this.velocity = UT.LERP(this.velocity, targetVelocity, accelAlphaValue);
 
@@ -159,8 +162,11 @@ export class Tank {
     
     // 2. CHASSIS TILT (Acceleration-based lurch)
     const acceleration = (targetVelocity - this.velocity);
-    const targetTilt = -acceleration * 0.12 * (Math.PI / 180); // Lurch proportional to accel
-    this.chassisTilt = UT.LERP(this.chassisTilt, targetTilt, 5.0 * (ts / 1000));
+    const targetTiltX = -acceleration * 0.18 * (Math.PI / 180); // Longitudinal lurch
+    const targetTiltZ = -turnInput * Math.abs(this.velocity) * 0.08 * (Math.PI / 180); // Lateral lurch
+    
+    this.chassisTiltX = UT.LERP(this.chassisTiltX || 0, targetTiltX, 8.0 * (ts / 1000));
+    this.chassisTiltZ = UT.LERP(this.chassisTiltZ || 0, targetTiltZ, 4.0 * (ts / 1000));
     
     // Softly upright the tank visual-only tilt
     const tiltErrorX = -currentUpVec[2]; 
@@ -221,7 +227,7 @@ export class Tank {
     const recoilImpact = this.recoil > 0 ? Math.sin(Date.now() * 0.1) * this.recoil * 0.02 : 0;
     const bodyRecoilOffset = this.recoil > 0 ? this.recoil * -0.2 : 0; // Push back effect
     const recoilQ = Quaternion.createFromEuler(0, recoilImpact, 0, 'YXZ');
-    const tiltQ = Quaternion.createFromEuler(this.chassisTilt, 0, 0, 'YXZ');
+    const tiltQ = Quaternion.createFromEuler(this.chassisTiltX, 0, this.chassisTiltZ, 'YXZ');
     
     // Apply tilt THEN recoil
     const finalVisualQ = currentQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z).mul(recoilQ.w, recoilQ.x, recoilQ.y, recoilQ.z);
@@ -251,9 +257,11 @@ export class Tank {
     let yawDiff = ((aimYaw - this.turretYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
     
-    // Traverse feel - Heavy and mechanical
-    const turretTraverseSpeed = 2.5;
-    this.turretYaw += yawDiff * turretTraverseSpeed * (ts / 1000);
+    // Traverse feel - Heavy and mechanical acceleration
+    const targetYawVel = yawDiff * 6.0; // Proportional control
+    const traverseAccel = 12.0;
+    this.turretYawVel = UT.LERP(this.turretYawVel, targetYawVel, 1.0 - Math.exp(-traverseAccel * (ts / 1000)));
+    this.turretYaw += this.turretYawVel * (ts / 1000);
     
     const localYaw = (this.turretYaw - currentYaw);
     const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');

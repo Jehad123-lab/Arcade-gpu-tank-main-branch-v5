@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr" style="background-color: #0f1220;">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes"/>
+  <link rel="stylesheet" type="text/css" href="styles/core.css">
+  <link rel="stylesheet" type="text/css" href="examples/visual-novel/styles.css">
+  <link rel="stylesheet" type="text/css" href="examples/checker/styles.css">
+  <link rel="stylesheet" type="text/css" href="examples/tcg/styles.css">
+  <link rel="stylesheet" type="text/css" href="examples/rpg/styles.css">
+  <link rel="stylesheet" type="text/css" href="examples/triple-triad/styles.css">
+  <link rel="stylesheet" type="text/css" href="examples/fight/styles.css">
+  <script type="module" src="src/examples/main.js"></script>
+  <title>ArcadeGPU Playground</title>
+  <link rel="icon" href="textures/favicon.ico">
+  <style>
+    @font-face {
+      font-family: "Press Start 2P";
+      font-style: normal;
+      font-weight: 400;
+      src: url(../fonts/PressStart2PRegular.otf) format("truetype");
+    }
+
+    #TITLE {
+      background-color: #656565;
+      color: white;
+      text-align: center;
+      width: 600px;
+      font-size: 18px;
+      margin: 0 auto;
+      margin-top: 15px;
+    }
+
+    #LOGO {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      width: 150px;
+    }
+
+    #APP {
+      margin: 0 auto;
+    }
+
+    #UI_ROOT * {
+      font-family: "Press Start 2P";
+    }
+  </style>
+</head>
+
+<body>
+  <h1 id="TITLE">ArcadeGPU - Demonstrations</h1>
+  <a href="/">
+    <img id="LOGO" src="textures/logo.png" alt="ArcadeGPU" />
+  </a>
+  <div id="APP">
+    <div id="APP_FAIL"></div>
+    <canvas id="CANVAS_3D" width="1px" height="1px"></canvas>
+    <canvas id="CANVAS_2D" width="1px" height="1px"></canvas>
+    <div id="UI_ROOT"></div>
+    <div id="UI_FADELAYER"></div>
+    <div id="UI_OVERLAYER"></div>
+  </div>
+</body>
+
+</html>

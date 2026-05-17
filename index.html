@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head><link rel="stylesheet" href="/styles.css">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #87ceeb;
+    }
+    #root {
+      pointer-events: none;
+    }
+    #root * {
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cause:wght@100..900&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+<script type="importmap" src="importmap.js"></script>
+<!-- 
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^0.7.0",
+    "react": "https://esm.sh/react@^19.0.0",
+    "react/": "https://esm.sh/react@^19.0.0/",
+    "react-dom/": "https://esm.sh/react-dom@^19.0.0/",
+    "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3"
+  }
+}
+</script>
+ -->
+    <div id="APP" style="width: 100%; height: 100%; overflow: hidden; position: fixed; inset: 0;">
+      <canvas id="CANVAS_3D" style="display: block; width: 100%; height: 100%;"></canvas>
+      <div id="root" style="position: absolute; inset: 0; pointer-events: none;"></div>
+      <div id="APP_FAIL" style="display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.8); color: white; justify-content: center; align-items: center; font-family: sans-serif; pointer-events: auto;"></div>
+    </div>
+    <style>
+      #APP_FAIL.SHOW { display: flex; }
+    </style>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

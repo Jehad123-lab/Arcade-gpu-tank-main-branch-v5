@@ -1,0 +1,70 @@
+{
+  "name": "arcadegpu",
+  "description": "A complete, fast and fun web game engine",
+  "homepage": "https://aliyah-corp.github.io",
+  "keywords": [
+    "game-engine-2d",
+    "game-engine-3d",
+    "arcadegpu"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aliyah-corp/ArcadeGPU.git"
+  },
+  "email": "aliyah.raijin@gmail.com",
+  "author": "Julien Rongiere",
+  "license": "MIT",
+  "version": "2.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "files": [
+    "dist/*"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "dev:tauri": "tauri dev",
+    "preview": "vite preview",
+    "build": "vite build",
+    "build:2d": "vite build -c vite/vite.config.2d.ts",
+    "build:2d:with:physics": "vite build -c vite/vite.config.2d.with.physics.ts",
+    "build:3d": "vite build -c vite/vite.config.3d.ts",
+    "build:3d:with:physics": "vite build -c vite/vite.config.3d.with.physics.ts",
+    "build:full": "vite build -c vite/vite.config.full.ts",
+    "build:demo": "vite build --mode demo",
+    "build:game": "vite build --mode game",
+    "build:types": "tsc --declaration --emitDeclarationOnly --project tsconfig.types.json",
+    "doc": "typedoc --entryPointStrategy Expand src/lib/ --json docs/doc.json --out docs/html --exclude \"quaternion.ts\"",
+    "markdown": "python3 .github/converter-typedoc-to-markdown.py --json docs/doc.json --output docs/markdowns"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1",
+    "@types/node": "^20.12.12",
+    "@vitejs/plugin-basic-ssl": "^1.0.2",
+    "typedoc": "^0.25.1",
+    "typedoc-plugin-markdown": "^3.16.0",
+    "typescript": "^4.6.4",
+    "vite": "^6.2.1",
+    "vite-plugin-full-reload": "^1.2.0",
+    "vite-plugin-wasm": "^3.4.1"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1",
+    "@types/stats": "^0.16.30",
+    "@webgpu/types": "^0.1.21",
+    "bdfparser": "^2.2.5",
+    "box2d-wasm": "^7.0.0",
+    "curve-interpolator": "^3.3.1",
+    "dotenv": "^16.4.5",
+    "esbuild": "^0.25.0",
+    "jolt-physics": "^1.0.0",
+    "jszip": "^3.10.1",
+    "rollup-plugin-dts": "^6.2.1",
+    "stats.js": "^0.17.0",
+    "unplugin-preprocessor-directives": "^1.0.3",
+    "vite-plugin-dts": "^4.5.4",
+    "vite-plugin-static-copy": "^3.0.0",
+    "vite-plugin-top-level-await": "^1.4.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  }
+}

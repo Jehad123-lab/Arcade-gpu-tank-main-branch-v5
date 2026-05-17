@@ -1,0 +1,42 @@
+{
+  "name": "meta-prototype-starter",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.29.2",
+    "@babel/standalone": "^7.29.1",
+    "@babel/types": "^7.29.0",
+    "@google/genai": "^0.7.0",
+    "@webgpu/types": "^0.1.69",
+    "framer": "^3.0.4",
+    "framer-motion": "^12.23.26",
+    "jolt-physics": "^1.0.0",
+    "lucide-react": "^1.14.0",
+    "phosphor-react": "^1.4.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-error-boundary": "^6.1.1",
+    "react-live": "^4.1.8",
+    "recast": "^0.23.11",
+    "stats.js": "^0.17.0",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.6.0"
+  },
+  "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

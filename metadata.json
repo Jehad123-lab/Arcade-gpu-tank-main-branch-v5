@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: Remix: arcade gpu tank main branch v4",
+  "description": "Example React app using Gemini",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -262,16 +262,17 @@ export class Enemy {
     const fLeft = qRot.rotateVector([-1.0, 0, -1.0]);
     const fRight = qRot.rotateVector([1.0, 0, -1.0]);
     
-    const rayDist = 15.0;
+    const rayDist = 12.0;
     const lRay = gfx3JoltManager.createRay(pos[0], castStartY, pos[2], pos[0] + fLeft[0] * rayDist, castStartY, pos[2] + fLeft[2] * rayDist);
     const rRay = gfx3JoltManager.createRay(pos[0], castStartY, pos[2], pos[0] + fRight[0] * rayDist, castStartY, pos[2] + fRight[2] * rayDist);
     
-    const lHit = lRay.fraction < 1.0 && lRay.fraction > 0.1;
-    const rHit = rRay.fraction < 1.0 && rRay.fraction > 0.1;
+    const lHit = lRay.fraction < 1.0 && lRay.fraction > 0.05;
+    const rHit = rRay.fraction < 1.0 && rRay.fraction > 0.05;
     
-    if (lHit && !rHit) return currentTargetAngle + 1.0;
-    if (rHit && !lHit) return currentTargetAngle - 1.0;
-    if (lHit && rHit) return currentTargetAngle + (lRay.fraction < rRay.fraction ? 1.5 : -1.5);
+    const avoidAngle = 0.45; // Reduced from 1.0 to avoid sudden snapping
+    if (lHit && !rHit) return currentTargetAngle + avoidAngle;
+    if (rHit && !lHit) return currentTargetAngle - avoidAngle;
+    if (lHit && rHit) return currentTargetAngle + (lRay.fraction < rRay.fraction ? avoidAngle * 1.5 : -avoidAngle * 1.5);
     
     return currentTargetAngle;
   }
@@ -286,31 +287,36 @@ export class Enemy {
     let yawDiff = ((targetAngle - this.rotation) % (Math.PI * 2) + (Math.PI * 2)) % (Math.PI * 2);
     if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
     
-    this.rotation += Math.sign(yawDiff) * Math.min(Math.abs(yawDiff), this.stats.rotSpeed * dt);
+    // Smoother rotation accumulation
+    const rotAlpha = 1.0 - Math.exp(-6.0 * dt);
+    this.rotation += yawDiff * rotAlpha;
     
     // Physics sync
     let physYawDiff = ((this.rotation - currentYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     if (physYawDiff > Math.PI) physYawDiff -= Math.PI * 2;
     
-    const targetAngVelY = physYawDiff * 15.0; 
+    const targetAngVelY = physYawDiff * 12.0; 
     const currentAngVel = this.physicsBody.body.GetAngularVelocity();
-    const newAngY = UT.LERP(currentAngVel.GetY(), targetAngVelY, 1.0 - Math.exp(-15.0 * dt));
+    const newAngY = UT.LERP(currentAngVel.GetY(), targetAngVelY, 1.0 - Math.exp(-12.0 * dt));
 
     const currentUpVec = currentQuat.rotateVector([0, 1, 0]);
-    const rightingStrength = 10.0;
-    const newAngX = currentAngVel.GetX() * 0.6 - currentUpVec[2] * rightingStrength;
-    const newAngZ = currentAngVel.GetZ() * 0.6 + currentUpVec[0] * rightingStrength;
+    const rightingStrength = 15.0;
+    const newAngX = currentAngVel.GetX() * 0.5 - currentUpVec[2] * rightingStrength;
+    const newAngZ = currentAngVel.GetZ() * 0.5 + currentUpVec[0] * rightingStrength;
 
     gfx3JoltManager.bodyInterface.SetAngularVelocity(this.physicsBody.body.GetID(), new Gfx3Jolt.Vec3(newAngX, newAngY, newAngZ));
 
     const targetVelocity = throttle * this.stats.speed;
-    this.velocity = UT.LERP(this.velocity, targetVelocity, 1.0 - Math.exp(-8.0 * dt));
+    this.velocity = UT.LERP(this.velocity, targetVelocity, 1.0 - Math.exp(-6.0 * dt));
 
     const forward = currentQuat.rotateVector([0, 0, -1]);
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
+    
+    // Mix in forward projection for slopes but keep gravity
+    const vY = (forward[1] * this.velocity) + (currentJoltVel.GetY() * 0.2); 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
-        new Gfx3Jolt.Vec3(forward[0] * this.velocity, currentJoltVel.GetY(), forward[2] * this.velocity)
+        new Gfx3Jolt.Vec3(forward[0] * this.velocity, vY, forward[2] * this.velocity)
     );
 
     // Visual tilt

@@ -251,7 +251,7 @@ export class Tank {
     let yawDiff = ((aimYaw - this.turretYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
     
-    const turretTraverseSpeed = 15.0;
+    const turretTraverseSpeed = 25.0;
     this.turretYaw += yawDiff * turretTraverseSpeed * (ts / 1000);
     
     const localYaw = (this.turretYaw - this.rotation);

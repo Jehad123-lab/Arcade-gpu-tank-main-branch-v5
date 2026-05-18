@@ -260,9 +260,27 @@ export class GameScreen extends Screen {
     this.intent.isFiringNormal = this.virtualFireNormal || inputManager.isActiveAction('FIRE') || (inputManager.isMouseDown() && !this.rightClickFire);
     this.intent.isFiringGrenade = this.virtualFireGrenade || this.rightClickFire || inputManager.isActiveAction('FIRE_ALT');
 
-    // Aim where the camera is looking (Directly ahead of the player)
-    this.intent.aimYaw = this.cameraYaw;
-    this.intent.aimPitch = this.cameraPitch;
+    const tankP = this.tank.physicsBody.body.GetPosition();
+    const playerPos: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
+    const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
+    const sideOffset = this.isSniperMode ? 0.8 : 1.5;
+    const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0, -1]);
+    const viewForward = rotQ.rotateVector([0, 0, -1]);
+    
+    const targetLook: vec3 = [
+        playerPos[0] + lookRight[0] + viewForward[0] * 100.0,
+        playerPos[1] + 1.2 + viewForward[1] * 100.0,
+        playerPos[2] + lookRight[2] + viewForward[2] * 100.0
+    ];
+
+    const turretPos: vec3 = [playerPos[0], playerPos[1] + 0.9, playerPos[2]];
+    const dx = targetLook[0] - turretPos[0];
+    const dy = targetLook[1] - turretPos[1];
+    const dz = targetLook[2] - turretPos[2];
+
+    this.intent.aimYaw = Math.atan2(-dx, -dz);
+    const dist2D = Math.sqrt(dx*dx + dz*dz);
+    this.intent.aimPitch = Math.atan2(dy, dist2D);
   }
 
   update(ts: number) {
@@ -545,7 +563,7 @@ export class GameScreen extends Screen {
               const ePos = enemy.physicsBody.body.GetPosition();
               const dist = UT.VEC3_DISTANCE(pPos3, [ePos.GetX(), ePos.GetY() + 0.3 * enemy.stats.scale, ePos.GetZ()]); 
               
-              const hitRange = 3.5 * enemy.stats.scale;
+              const hitRange = 4.5 * enemy.stats.scale;
               if (dist < hitRange) {
                   enemy.lastHitTime = Date.now();
                   this.onProjectileHit(p, enemy, pPos3);

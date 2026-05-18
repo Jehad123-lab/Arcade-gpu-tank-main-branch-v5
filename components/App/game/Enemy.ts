@@ -118,8 +118,6 @@ export class Enemy {
     Enemy.hatchMesh = createBoxMesh(0.6, 0.15, 0.6, [0.15, 0.15, 0.15]);
     Enemy.antennaMesh = createBoxMesh(0.05, 1.5, 0.05, [0.1, 0.1, 0.1]);
     Enemy.projMesh = createBoxMesh(0.6, 0.6, 0.6, [1.0, 0.2, 0.0]);
-    Enemy.hpGreen = createUnitBoxMesh([0, 1, 0]);
-    Enemy.hpRed = createUnitBoxMesh([1, 0, 0]);
 
     Enemy.initialized = true;
   }
@@ -410,25 +408,5 @@ export class Enemy {
 
     syncToTurret(Enemy.hatchMesh, [0, 0.45, 0.3]);
     syncToTurret(Enemy.antennaMesh, [-0.6, 1.125, 0.6]);
-
-    this.drawHealthBar(origin, this.hp, this.stats.maxHp, cameraYaw);
-  }
-
-  drawHealthBar(origin: vec3, hp: number, maxHp: number, cameraYaw: number = 0) {
-      const hpPercentage = Math.max(0, hp / maxHp);
-      const barMesh = hpPercentage > 0.4 ? Enemy.hpGreen : Enemy.hpRed;
-      const barWidth = 2.0 * this.stats.scale;
-      const scaleX = barWidth * hpPercentage;
-      const barRotation = Quaternion.createFromEuler(cameraYaw, 0, 0, 'YXZ');
-      const offsetLocal = [-(barWidth - scaleX) / 2, 0, 0] as vec3;
-      const offsetWorld = barRotation.rotateVector(offsetLocal);
-      
-      const matBar = UT.MAT4_TRANSFORM(
-          [origin[0] + offsetWorld[0], origin[1] + 3.0 * this.stats.scale, origin[2] + offsetWorld[2]], 
-          [0, 0, 0], 
-          [scaleX, 0.2, 0.2], 
-          barRotation
-      );
-      gfx3MeshRenderer.drawMesh(barMesh, matBar);
   }
 }

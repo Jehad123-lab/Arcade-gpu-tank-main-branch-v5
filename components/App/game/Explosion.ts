@@ -134,14 +134,14 @@ export class Explosion implements Poolable<Explosion> {
             }
         } else {
             // Muzzle or normal explosion (Hit effects)
-            const numParticles = Math.floor(25 * scaleMultiplier);
+            const numParticles = Math.floor((type === 'muzzle' ? 12 : 25) * scaleMultiplier);
 
             if (type === 'muzzle') {
                 this.particles.push({ 
                     pos: [x, y, z], vel: [0, 0, 0], 
                     life: 0.1, maxLife: 0.1, 
                     colorIdx: 1, 
-                    scaleMultiplier: scaleMultiplier * 3.0, 
+                    scaleMultiplier: scaleMultiplier * 1.8, 
                     type: 'flash' 
                 });
             }
@@ -177,7 +177,7 @@ export class Explosion implements Poolable<Explosion> {
                 this.particles.push({ 
                     pos, vel, life, maxLife: life, 
                     colorIdx: Math.random() < 0.6 ? 1 : (Math.random() < 0.5 ? 2 : 0), 
-                    scaleMultiplier: scaleMultiplier * (1.0 + Math.random() * 2.0), 
+                    scaleMultiplier: scaleMultiplier * (type === 'muzzle' ? 0.6 : 1.0) * (1.0 + Math.random() * 2.0), 
                     type: 'fire' 
                 });
             }

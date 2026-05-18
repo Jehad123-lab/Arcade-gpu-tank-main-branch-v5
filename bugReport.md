@@ -16,7 +16,7 @@ Tracking all issues, from critical bugs to minor suggestions.
 -   **[RESOLVED] GROUND SINKING**: Visual meshes were offset downwards. Fixed by center-aligning meshes with physics bodies.
 -   **[RESOLVED] CAMERA TRACKING**: Camera tracked stale mesh positions. Fixed by tracking physics bodies directly.
 -   **[RESOLVED] CAMERA JITTER**: Refactored camera orbit interpolation to eliminate micro-shaking.
--   **[RESOLVED] TANK HANDLING**: Added momentum and improved steering responsiveness. Significantly enhanced acceleration profile and pivot turn speeds in the latest update for better arcade feel.
+-   **[RESOLVED] TANK HANDLING**: Added momentum and improved steering responsiveness. Switched to Camera-Relative smart controls for intuitive W/A/S/D movement, resolving confusing legacy tank axis controls entirely.
 -   **[RESOLVED] AIMING DIFFICULTY**: Increased turret traverse speed and added red laser pointer for visual guidance. (Laser removed later per feedback).
 -   **[RESOLVED] CAMERA AUTO-FOLLOW**: Camera now intelligently follows tank movement direction for easier navigation.
 -   **[RESOLVED] ARCADE PHYSICS**: Controls now feature speed-sensitive steering and snappy braking/acceleration.

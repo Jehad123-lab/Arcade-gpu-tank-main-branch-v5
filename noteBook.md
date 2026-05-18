@@ -14,6 +14,7 @@ A log of all tasks, ideas, and progress for this project.
 
 ## Done
 
+-   **[2026-05-18 09:35]**: Implemented Camera-Relative "Twin-Stick/Halo-style" Controls for the Tank. W always moves forward relative to the camera, S moves backward, A/D strafe left and right. The chassis automatically rotates smoothly to match the movement direction, and seamlessly enters reverse driving when the target angle is behind the tank. This solves the "curly/clunky" tank axles control issues.
 -   **[2026-05-18 09:25]**: Significantly enhanced tank movement responsiveness. Implemented a higher `TANK_MAX_SPEED` (16.0) and a more aggressive acceleration/braking model. Tuned "pivot turns" to allow much faster rotation when slow or stationary. Refined slope alignment logic for greater stability on uneven terrain.
 -   **[2026-05-17 10:56]**: Fixed `ReferenceError: forwardVecActual is not defined` in `Tank.ts` caused by an incomplete variable rename during the movement system overhaul.
 -   **[2026-05-17 10:55]**: Overhauled the tank movement controller. Movement is now strictly locked to the chassis forward orientation, eliminating veering and "drifting" issues. Implemented 3D vector projection for climbing slopes and increased physical weight/damping for a realistic military tank feel.

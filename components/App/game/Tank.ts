@@ -145,31 +145,61 @@ export class Tank {
     this.grenadeRecoil -= (ts / 1000) * 1.5;
     if (this.grenadeRecoil < 0) this.grenadeRecoil = 0;
     
-    // 1. TANK MOVEMENT LOGIC
-    const throttle = (Math.abs(moveDir.y) < 0.05) ? 0 : moveDir.y;
-    const steer = (Math.abs(moveDir.x) < 0.05) ? 0 : -moveDir.x;
+    // 1. TANK MOVEMENT LOGIC (Camera-Relative Smart Controls)
+    const isMoving = Math.abs(moveDir.x) > 0.05 || Math.abs(moveDir.y) > 0.05;
+    const TANK_MAX_SPEED = 16.0; // Responsive arcade speed
 
-    // Responsive Acceleration & Braking
-    const TANK_MAX_SPEED = 16.0; // Slightly faster for better feel
-    let targetSpeed = throttle * TANK_MAX_SPEED;
-    
-    // Check if we are braking (trying to go opposite of current speed)
-    const isBraking = (throttle > 0 && this.speed < -0.1) || (throttle < 0 && this.speed > 0.1);
-    
-    // Dynamic Acceleration: faster when starting, very fast when braking
-    const linearAccel = throttle !== 0 
-        ? (isBraking ? 6.0 : 3.5) 
-        : (Math.abs(this.speed) > 0.1 ? 2.5 : 1.2); // Stronger engine braking when letting go
-    
-    this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
+    if (isMoving) {
+        // Find desired world angle based on camera's aimYaw and input direction
+        let targetWorldYaw = aimYaw + Math.atan2(-moveDir.x, moveDir.y);
+        
+        let yawDiff = ((targetWorldYaw - this.rotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+        if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
 
-    // ANGULAR SPEED (Rotation - heavy pivot feel)
-    // A tank should turn fastest when nearly stationary
-    const speedRatio = Math.abs(this.speed) / TANK_MAX_SPEED;
-    const pivotBoost = 1.0 + (1.0 - speedRatio) * 1.2; 
-    const targetTurnSpeed = steer * 1.8 * pivotBoost; 
-    this.rotation += targetTurnSpeed * (ts / 1000);
-    this.rotation = UT.CLAMP_ANGLE(this.rotation);
+        let isReversing = false;
+        
+        // If the target direction is more than 90 degrees away from current facing, 
+        // go backwards instead of doing a full 180 U-turn!
+        if (Math.abs(yawDiff) > Math.PI / 2 + 0.1) {
+            targetWorldYaw = targetWorldYaw + Math.PI;
+            isReversing = true;
+            // recompute yawDiff
+            yawDiff = ((targetWorldYaw - this.rotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+            if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+        }
+
+        // Rotate chassis towards target direction
+        const speedRatio = Math.abs(this.speed) / TANK_MAX_SPEED;
+        const pivotBoost = 1.0 + (1.0 - Math.min(1.0, speedRatio)) * 1.5; 
+        const maxTurn = 2.0 * pivotBoost * (ts / 1000); 
+
+        if (Math.abs(yawDiff) > maxTurn) {
+            this.rotation += Math.sign(yawDiff) * maxTurn;
+        } else {
+            this.rotation = targetWorldYaw;
+        }
+        
+        this.rotation = UT.CLAMP_ANGLE(this.rotation);
+
+        // Calculate alignment to apply gradual speed (auto-slowdown during sharp turns)
+        const alignment = Math.max(0, Math.cos(yawDiff));
+        
+        const maxCurrentSpeed = TANK_MAX_SPEED * alignment;
+        let targetSpeed = isReversing ? -maxCurrentSpeed : maxCurrentSpeed;
+
+        // If wildly turning, slow down significantly to allow pivot
+        if (Math.abs(yawDiff) > Math.PI / 3) {
+             targetSpeed *= 0.2; 
+        }
+        
+        const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
+        const linearAccel = isBraking ? 6.0 : 3.5;
+        this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
+        
+    } else {
+        // Braking
+        this.speed = UT.LERP(this.speed, 0, 1.0 - Math.exp(-5.0 * (ts / 1000)));
+    }
 
     // 2. JOLT PHYSICS SYNC
     gfx3JoltManager.bodyInterface.ActivateBody(this.physicsBody.body.GetID());

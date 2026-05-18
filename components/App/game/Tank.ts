@@ -221,7 +221,7 @@ export class Tank {
     const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
 
     // RECOIL CALCULATION (Sharp kick, slow settle)
-    const bodyRecoilOffset = this.recoil * -0.35; // Sharp push back
+    const bodyRecoilOffset = this.recoil * -0.22; // Slightly reduced kick for stability
     const tiltQ = Quaternion.createFromEuler(finalTilt, 0, 0, 'YXZ');
     
     // Final body orientation with tilt and lurch
@@ -234,7 +234,7 @@ export class Tank {
     ];
 
     const bodyMatrix = UT.MAT4_TRANSFORM(recoiledOrigin, [0, 0, 0], [1, 1, 1], finalVisualQ);
-    this.recoil = UT.LERP(this.recoil, 0, 10.0 * (ts / 1000)); // Snappy recovery
+    this.recoil = UT.LERP(this.recoil, 0, 8.0 * (ts / 1000)); // Smoother recovery
     
     this.body.enableManualTransform(bodyMatrix);
 
@@ -257,13 +257,8 @@ export class Tank {
     const localYaw = (this.turretYaw - this.rotation);
     const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
     
-    // FIX: Lower turret pivot to sit flush on chassis (0.75 instead of 0.85)
-    // Add side lurch to turret when firing
-    const turretLurchYaw = Math.sin(Date.now() * 0.05) * this.recoil * 0.02;
-    const lurchQ = Quaternion.createFromEuler(turretLurchYaw, 0, 0, 'YXZ');
-    
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));
-    const turretMatrix = UT.MAT4_MULTIPLY(UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4()), lurchQ.toMatrix4());
+    const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
     this.turret.enableManualTransform(turretMatrix);
  
     // BARREL PITCH (Smoothed)
@@ -274,11 +269,14 @@ export class Tank {
     
     const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
 
-    // Recoil makes the barrel slide back into the turret
-    const barrelRecoilVis = Math.max(this.shellRecoil * 1.5, this.grenadeRecoil * 0.8);
+    // Reduced recoil slide to prevent clipping out the back of the turret
+    const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);
     const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.08, -1.0 + barrelRecoilVis));
     const barrelMatrix = UT.MAT4_MULTIPLY(barrelPivotMatrix, pitchQ.toMatrix4());
     this.barrel.enableManualTransform(barrelMatrix);
+    
+    this.shellRecoil = UT.LERP(this.shellRecoil, 0, 10.0 * (ts / 1000));
+    this.grenadeRecoil = UT.LERP(this.grenadeRecoil, 0, 10.0 * (ts / 1000));
     
     const syncToTurret = (mesh: Gfx3Mesh, localPos: vec3) => {
         const localMatrix = UT.MAT4_TRANSLATE(localPos[0], localPos[1], localPos[2]);

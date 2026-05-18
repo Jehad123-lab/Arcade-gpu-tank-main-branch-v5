@@ -331,15 +331,23 @@ export class Tank {
     syncRigid(this.trackR, [1.425, -0.15, 0]);
     syncRigid(this.engine, [0, 0.3, 1.8]);
 
-    // 3. INDEPENDENT TURRET (Aligns to aimYaw)
-    let yawDiff = ((aimYaw - this.turretYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    // 3. INDEPENDENT TURRET (Aligns to aim direction accounting for chassis tilt)
+    const aimRotQ = Quaternion.createFromEuler(aimYaw, aimPitch, 0, 'YXZ');
+    const globalAimDir = aimRotQ.rotateVector([0, 0, -1]);
+    
+    const invChassisQ = finalVisualQ.inverse();
+    const localAimDir = invChassisQ.rotateVector(globalAimDir);
+
+    const targetLocalYaw = Math.atan2(-localAimDir[0], -localAimDir[2]);
+    const targetLocalPitch = Math.asin(localAimDir[1]);
+
+    let yawDiff = ((targetLocalYaw - this.turretYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
     
     const turretTraverseSpeed = 25.0;
     this.turretYaw += yawDiff * turretTraverseSpeed * (ts / 1000);
     
-    const localYaw = (this.turretYaw - this.rotation);
-    const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
+    const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
@@ -348,8 +356,8 @@ export class Tank {
     // BARREL PITCH (Smoothed)
     const maxDepress = -0.15; 
     const maxElevate = 0.55;
-    const targetPitch = Math.max(maxDepress, Math.min(maxElevate, aimPitch));
-    this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 4.0 * (ts / 1000));
+    const targetPitch = Math.max(maxDepress, Math.min(maxElevate, targetLocalPitch));
+    this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 8.0 * (ts / 1000));
     
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 

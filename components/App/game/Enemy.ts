@@ -337,20 +337,26 @@ export class Enemy {
     const dt = ts / 1000;
     const PI2 = Math.PI * 2;
     
-    // Turret aiming directly at player
+    // Turret aiming directly at player (compensating for chassis tilt)
     const pos = JOLT_RVEC3_TO_VEC3(this.physicsBody.body.GetPosition());
     const dx = playerPos[0] - pos[0];
+    const dy = playerPos[1] - (pos[1] + 0.85 * this.stats.scale);
     const dz = playerPos[2] - pos[2];
-    const playerAngle = Math.atan2(-dx, -dz);
+    
+    const globalAimDir = UT.VEC3_NORMALIZE([dx, dy, dz]);
+    
+    // finalVisualQ equivalent from visualQuat
+    const invChassisQ = this.visualQuat.inverse();
+    const localAimDir = invChassisQ.rotateVector(globalAimDir);
 
-    let turretYawDiff = ((playerAngle - this.turretYaw) % PI2 + PI2) % PI2;
+    const targetLocalYaw = Math.atan2(-localAimDir[0], -localAimDir[2]);
+    const targetLocalPitch = Math.asin(localAimDir[1]);
+
+    let turretYawDiff = ((targetLocalYaw - this.turretYaw) % PI2 + PI2) % PI2;
     if (turretYawDiff > Math.PI) turretYawDiff -= Math.PI * 2;
     this.turretYaw += turretYawDiff * (1.0 - Math.exp(-6.0 * dt));
 
-    const dy = playerPos[1] - (pos[1] + 0.85 * this.stats.scale);
-    const dist2D = Math.sqrt(dx*dx + dz*dz);
-    const targetPitch = Math.atan2(dy, dist2D);
-    this.barrelPitch += (targetPitch - this.barrelPitch) * (1.0 - Math.exp(-4.0 * dt));
+    this.barrelPitch += (targetLocalPitch - this.barrelPitch) * (1.0 - Math.exp(-4.0 * dt));
 
     if (dist < 45 && Math.abs(turretYawDiff) < 0.2 && this.shootCooldown <= 0 && this.state !== EnemyState.IDLE) {
         const muzzleData = this.getMuzzleData(this.visualQuat);
@@ -367,10 +373,7 @@ export class Enemy {
     const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
     const bodyMatrix = UT.MAT4_TRANSFORM(origin, [0, 0, 0], [1, 1, 1], q);
     
-    const currentForward = q.rotateVector([0, 0, -1]);
-    const currentYaw = Math.atan2(-currentForward[0], -currentForward[2]);
-    const localYaw = (this.turretYaw - currentYaw);
-    const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
+    const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
 
     const s = this.stats.scale;
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
@@ -439,10 +442,7 @@ export class Enemy {
     syncRigid(Enemy.accentGlowMesh, [0.6, 0.4, -1.6]);
     syncRigid(Enemy.accentGlowMesh, [-0.6, 0.4, -1.6]);
 
-    const currentForward = finalVisualQ.rotateVector([0, 0, -1]);
-    const currentYaw = Math.atan2(-currentForward[0], -currentForward[2]);
-    const localYaw = (this.turretYaw - currentYaw);
-    const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
+    const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
 
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4()); 

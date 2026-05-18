@@ -151,8 +151,11 @@ const App = () => {
     const [playerHp, setPlayerHp] = useState(100);
     const [score, setScore] = useState(0);
     const [isZoomed, setIsZoomed] = useState(false);
+    const [gunAimPos, setGunAimPos] = useState<{ x: number, y: number } | null>(null);
+    const [targetAimPos, setTargetAimPos] = useState<{ x: number, y: number } | null>(null);
+
     const gameScreenRef = useRef<GameScreen | null>(null);
-    const { width } = useWindowSize();
+    const { width, height } = useWindowSize();
     
     const isMobile = width < 600;
     const isTablet = width >= 600 && width < 1024;
@@ -173,6 +176,7 @@ const App = () => {
         };
         init();
 
+        // High-frequency polling for UI (Smoother reticle)
         const interval = setInterval(() => {
             if (gameScreenRef.current) {
                 setEnemyCount(gameScreenRef.current.enemies.length);
@@ -181,8 +185,13 @@ const App = () => {
                     setPlayerHp(gameScreenRef.current.tank.hp);
                 }
                 setIsZoomed(gameScreenRef.current.isSniperMode);
+                
+                // Reticle positioning
+                const gunWorldAim = gameScreenRef.current.getGunAimWorldPos();
+                setGunAimPos(gameScreenRef.current.worldToScreen(gunWorldAim));
+                setTargetAimPos({ x: width / 2, y: height / 2 }); // Camera center is always target
             }
-        }, 100);
+        }, 16);
 
         return () => {
             document.removeEventListener('contextmenu', handleContextMenu);
@@ -351,52 +360,100 @@ const App = () => {
                 </div>
             </div>
 
-            {/* RETICLE */}
+            {/* RETICLE SYSTEM */}
             <div style={{
                 position: 'fixed',
                 inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 pointerEvents: 'none',
+                zIndex: 10,
             }}>
-                <motion.div 
-                    animate={{ 
-                        scale: isZoomed ? 1.5 : 1.0,
-                        opacity: isZoomed ? 1.0 : 0.7 
-                    }}
-                    style={{
-                        width: '40px',
-                        height: '40px',
-                        border: `1px solid ${isZoomed ? Tokens.colors.accent : Tokens.colors.contentDim}`,
-                        borderRadius: '2px',
-                        position: 'relative',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}
-                >
-                    <div style={{ position: 'absolute', top: '-10px', left: '50%', width: '1px', height: '6px', background: Tokens.colors.accent }} />
-                    <div style={{ position: 'absolute', bottom: '-10px', left: '50%', width: '1px', height: '6px', background: Tokens.colors.accent }} />
-                    <div style={{ position: 'absolute', left: '-10px', top: '50%', width: '6px', height: '1px', background: Tokens.colors.accent }} />
-                    <div style={{ position: 'absolute', right: '-10px', top: '50%', width: '6px', height: '1px', background: Tokens.colors.accent }} />
-                    <div style={{ width: '4px', height: '4px', backgroundColor: Tokens.colors.content, borderRadius: '100%' }} />
-                    
-                    {isZoomed && (
-                        <motion.div 
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            style={{ 
-                                position: 'absolute',
-                                width: '120%',
-                                height: '120%',
-                                border: `1px solid ${Tokens.colors.accent}`,
-                                opacity: 0.3,
-                                borderRadius: '100%'
-                            }} 
-                        />
-                    )}
-                </motion.div>
+                {/* 1. Camera Target Reticle (Static center usually) */}
+                {targetAimPos && (
+                    <motion.div 
+                        animate={{ 
+                            x: targetAimPos.x, 
+                            y: targetAimPos.y,
+                            scale: isZoomed ? 1.4 : 1.0,
+                        }}
+                        style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            width: '40px',
+                            height: '40px',
+                            marginLeft: '-20px',
+                            marginTop: '-20px',
+                            border: `1px solid ${Tokens.colors.contentDim}`,
+                            opacity: 0.4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '2px'
+                        }}
+                    >
+                        <div style={{ width: '2px', height: '2px', backgroundColor: Tokens.colors.content, borderRadius: '50%' }} />
+                    </motion.div>
+                )}
+
+                {/* 2. Gun Aim Reticle (Tracks where the tank is actually pointing) */}
+                {gunAimPos && (
+                    <motion.div 
+                        initial={false}
+                        animate={{ 
+                            x: gunAimPos.x, 
+                            y: gunAimPos.y,
+                            scale: isZoomed ? 1.2 : 1.0,
+                        }}
+                        transition={{ type: 'spring', damping: 20, stiffness: 200, mass: 0.5 }}
+                        style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            width: '48px',
+                            height: '48px',
+                            marginLeft: '-24px',
+                            marginTop: '-24px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            pointerEvents: 'none'
+                        }}
+                    >
+                        {/* Circle elements for the gun aim */}
+                        <div style={{
+                            position: 'absolute',
+                            inset: 0,
+                            border: `2px solid ${Tokens.colors.accent}`,
+                            borderRadius: '50%',
+                            opacity: 0.8,
+                            clipPath: 'polygon(0% 0%, 100% 0%, 100% 30%, 0% 30%, 0% 70%, 100% 70%, 100% 100%, 0% 100%)', // Dashed look
+                        }} />
+                        
+                        {/* Inner dots */}
+                        <div style={{ width: '4px', height: '4px', backgroundColor: Tokens.colors.accent, borderRadius: '50%' }} />
+                        
+                        {/* Status lines */}
+                        <div style={{ position: 'absolute', left: '-12px', width: '8px', height: '2px', background: Tokens.colors.accent }} />
+                        <div style={{ position: 'absolute', right: '-12px', width: '8px', height: '2px', background: Tokens.colors.accent }} />
+                    </motion.div>
+                )}
+
+                {/* ZOOM INFO */}
+                {isZoomed && (
+                    <div style={{
+                        position: 'absolute',
+                        left: '50%',
+                        top: '55%',
+                        transform: 'translateX(-50%)',
+                        color: Tokens.colors.accent,
+                        fontFamily: Tokens.fonts.data,
+                        fontSize: '10px',
+                        letterSpacing: '2px',
+                        textShadow: '0 0 10px rgba(255, 62, 62, 0.5)'
+                    }}>
+                        SNIPER_MODE_ACTIVE // X4.0
+                    </div>
+                )}
             </div>
 
             {/* BOTTOM CONTROLS */}

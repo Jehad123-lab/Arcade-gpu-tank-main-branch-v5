@@ -196,48 +196,58 @@ export class Tank {
         yawQ.rotateVector([-halfW, 0, -halfD])
     ];
 
-    let avgNormal = [0, 0, 0];
     let hitCount = 0;
     let minDistFromCenter = 999;
     const rayLen = 4.0;
     const rayUpOffset = 0.5;
-    
-    for (const offset of offsets) {
+
+    const pts = offsets.map((offset) => {
         const sx = pos.GetX() + offset[0];
         const sy = pos.GetY() + rayUpOffset;
         const sz = pos.GetZ() + offset[2];
         const rayHit = gfx3JoltManager.createRay(sx, sy, sz, sx, sy - rayLen, sz);
         
-        if (rayHit.body && rayHit.normal) {
-            avgNormal[0] += rayHit.normal.GetX();
-            avgNormal[1] += rayHit.normal.GetY();
-            avgNormal[2] += rayHit.normal.GetZ();
+        if (rayHit.body && rayHit.body.GetID().GetIndexAndSequenceNumber() !== this.physicsBody.body.GetID().GetIndexAndSequenceNumber() && rayHit.normal) {
             hitCount++;
-            
             const distFromCenter = rayHit.fraction * rayLen - rayUpOffset;
             if (distFromCenter < minDistFromCenter) minDistFromCenter = distFromCenter;
+            return [sx, sy - rayHit.fraction * rayLen, sz];
+        } else {
+            // Un-supported corner drops down
+            return [sx, sy - rayLen * 0.8, sz]; 
         }
-    }
-    
+    });
+
     let groundNormal: vec3 = [0, 1, 0];
     let isGrounded = false;
 
+    // Reconstruct plane normal from diagonals
+    // Diagonals: pts[0] to pts[3], and pts[1] to pts[2]
+    const d1 = [pts[3][0] - pts[0][0], pts[3][1] - pts[0][1], pts[3][2] - pts[0][2]];
+    const d2 = [pts[2][0] - pts[1][0], pts[2][1] - pts[1][1], pts[2][2] - pts[1][2]];
+    
+    let crossNormal: vec3 = [
+         d1[1]*d2[2] - d1[2]*d2[1],
+         d1[2]*d2[0] - d1[0]*d2[2],
+         d1[0]*d2[1] - d1[1]*d2[0]
+    ];
+    crossNormal = UT.VEC3_NORMALIZE(crossNormal);
+    if (crossNormal[1] < 0) {
+        crossNormal[0] = -crossNormal[0];
+        crossNormal[1] = -crossNormal[1];
+        crossNormal[2] = -crossNormal[2];
+    }
+    
     const centerHit = gfx3JoltManager.createRay(pos.GetX(), pos.GetY() + rayUpOffset, pos.GetZ(), pos.GetX(), pos.GetY() - rayLen, pos.GetZ());
-    if (centerHit.body && centerHit.normal) {
-        avgNormal[0] += centerHit.normal.GetX();
-        avgNormal[1] += centerHit.normal.GetY();
-        avgNormal[2] += centerHit.normal.GetZ();
+    if (centerHit.body && centerHit.body.GetID().GetIndexAndSequenceNumber() !== this.physicsBody.body.GetID().GetIndexAndSequenceNumber() && centerHit.normal) {
         hitCount++;
         const centerDist = centerHit.fraction * rayLen - rayUpOffset;
         if (centerDist < minDistFromCenter) minDistFromCenter = centerDist;
     }
 
     if (hitCount > 0) {
-        const len = Math.sqrt(avgNormal[0]*avgNormal[0] + avgNormal[1]*avgNormal[1] + avgNormal[2]*avgNormal[2]);
-        if (len > 0.001) {
-            groundNormal = [avgNormal[0]/len, avgNormal[1]/len, avgNormal[2]/len];
-            if (minDistFromCenter < 1.0) isGrounded = true;
-        }
+        groundNormal = crossNormal;
+        if (minDistFromCenter < 1.0) isGrounded = true;
     }
 
     // Smoothly align the tank's UP to the ground normal
@@ -265,7 +275,7 @@ export class Tank {
     if (isGrounded) {
        newVelY = forward[1] * this.speed;
        if (this.speed !== 0 || Math.abs(groundNormal[1]) < 0.99) {
-           newVelY -= 2.0;
+           newVelY -= 0.2; // small downward pressure to stick to slopes, 2.0 was too violent
        }
     }
 

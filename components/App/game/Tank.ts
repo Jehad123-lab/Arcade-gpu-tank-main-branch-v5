@@ -204,9 +204,16 @@ export class Tank {
     // 2. JOLT PHYSICS SYNC
     gfx3JoltManager.bodyInterface.ActivateBody(this.physicsBody.body.GetID());
 
+    // AXIS ANALYSIS:
+    // Front: -Z (Depth is 3.3, movement follows this axis)
+    // Back: +Z
+    // Left: -X / Right: +X
+    // Up: +Y
     const pos = this.physicsBody.body.GetPosition();
-    const rayStart = [pos.GetX(), pos.GetY() + 0.5, pos.GetZ()];
-    const rayEnd = [pos.GetX(), pos.GetY() - 2.5, pos.GetZ()];
+    
+    // Start ray above the tank and shoot down, but offset it to handle the slope detection better
+    const rayStart = [pos.GetX(), pos.GetY() + 1.5, pos.GetZ()];
+    const rayEnd = [pos.GetX(), pos.GetY() - 3.0, pos.GetZ()];
     
     const rayHit = gfx3JoltManager.createRay(rayStart[0], rayStart[1], rayStart[2], rayEnd[0], rayEnd[1], rayEnd[2]);
     let groundNormal: vec3 = [0, 1, 0];
@@ -216,20 +223,23 @@ export class Tank {
     }
 
     // Smoothly align the tank's UP to the ground normal
-    this.currentNormal[0] = UT.LERP(this.currentNormal[0], groundNormal[0], 10.0 * (ts / 1000));
-    this.currentNormal[1] = UT.LERP(this.currentNormal[1], groundNormal[1], 10.0 * (ts / 1000));
-    this.currentNormal[2] = UT.LERP(this.currentNormal[2], groundNormal[2], 10.0 * (ts / 1000));
+    // Increased smoothing for stability, but kept responsive for bumps
+    this.currentNormal[0] = UT.LERP(this.currentNormal[0], groundNormal[0], 8.0 * (ts / 1000));
+    this.currentNormal[1] = UT.LERP(this.currentNormal[1], groundNormal[1], 8.0 * (ts / 1000));
+    this.currentNormal[2] = UT.LERP(this.currentNormal[2], groundNormal[2], 8.0 * (ts / 1000));
     this.currentNormal = UT.VEC3_NORMALIZE(this.currentNormal);
 
-    // Calculate the orientation from Yaw + Ground Normal
-    // 1. Create a quat for the arcade yaw
-    const yawQ = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
+    // Calculate the orientation from Yaw + Local Slope Projection
+    // We project the ground normal into the tank's local Yaw-space to find local Pitch and Roll
+    const invYawQ = Quaternion.createFromEuler(-this.rotation, 0, 0, 'YXZ');
+    const localNormal = invYawQ.rotateVector(this.currentNormal);
     
-    // 2. Align local UP ([0, 1, 0]) to currentNormal
-    const upAlignmentQ = Quaternion.createFromBetweenVectors([0, 1, 0], this.currentNormal);
-    
-    // 3. Combine them: Apply Yaw first, then align to surface
-    const targetQuat = upAlignmentQ.mul(yawQ.w, yawQ.x, yawQ.y, yawQ.z);
+    // Local Pitch (rotation around X) and Roll (rotation around Z)
+    const targetPitch = Math.atan2(localNormal[2], localNormal[1]);
+    const targetRoll = Math.atan2(-localNormal[0], localNormal[1]);
+
+    // Construct stable target rotation (Yaw -> Pitch -> Roll)
+    const targetQuat = Quaternion.createFromEuler(this.rotation, targetPitch, targetRoll, 'YXZ');
     
     const joltQuatSet = new Gfx3Jolt.Quat(targetQuat.x, targetQuat.y, targetQuat.z, targetQuat.w);
     gfx3JoltManager.bodyInterface.SetRotation(this.physicsBody.body.GetID(), joltQuatSet, Gfx3Jolt.EActivation_Activate);
@@ -316,8 +326,8 @@ export class Tank {
     // BARREL PITCH (Smoothed)
     const maxDepress = -0.15; 
     const maxElevate = 0.55;
-    const targetPitch = Math.max(maxDepress, Math.min(maxElevate, aimPitch));
-    this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 4.0 * (ts / 1000));
+    const targetBarrelPitch = Math.max(maxDepress, Math.min(maxElevate, aimPitch));
+    this.barrelPitch = UT.LERP(this.barrelPitch, targetBarrelPitch, 4.0 * (ts / 1000));
     
     const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
 

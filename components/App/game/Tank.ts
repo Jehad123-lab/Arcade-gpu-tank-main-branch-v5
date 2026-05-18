@@ -341,11 +341,8 @@ export class Tank {
     const targetLocalYaw = Math.atan2(-localAimDir[0], -localAimDir[2]);
     const targetLocalPitch = Math.asin(localAimDir[1]);
 
-    let yawDiff = ((targetLocalYaw - this.turretYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-    if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
-    
-    const turretTraverseSpeed = 25.0;
-    this.turretYaw += yawDiff * turretTraverseSpeed * (ts / 1000);
+    // Instantly snap to target yaw to follow camera "no matter what"
+    this.turretYaw = targetLocalYaw;
     
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
@@ -353,11 +350,15 @@ export class Tank {
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
     this.turret.enableManualTransform(turretMatrix);
  
-    // BARREL PITCH (Smoothed)
-    const maxDepress = -0.15; 
-    const maxElevate = 0.55;
-    const targetPitch = Math.max(maxDepress, Math.min(maxElevate, targetLocalPitch));
-    this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 8.0 * (ts / 1000));
+    // BARREL PITCH (Instantly follow, invert pitch as requested)
+    // The user requested to "invert rotation angle of the canon"
+    const invertedTargetPitch = -targetLocalPitch; 
+    
+    // We remove the tight clamp so it points exactly where the camera looks, 
+    // but a wide clamp prevents it from clipping through the tank body completely.
+    const maxDepress = -1.5; 
+    const maxElevate = 1.5;
+    this.barrelPitch = Math.max(maxDepress, Math.min(maxElevate, invertedTargetPitch));
     
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 

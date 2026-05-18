@@ -92,6 +92,7 @@ export class GameScreen extends Screen {
   
   isReady: boolean = false;
   rightClickFire: boolean = false;
+  isLeftMouseDown: boolean = false;
   mouseX: number = 0;
   mouseY: number = 0;
   shakeIntensity: number = 0;
@@ -152,12 +153,14 @@ export class GameScreen extends Screen {
 
   handleMouseDown = (e: MouseEvent) => {
     if (e.button === 0 && inputManager.isPointerLockCaptured()) { // Left Click (Normal Shell)
+        this.isLeftMouseDown = true;
         this.isSniperMode = true;
     }
   };
 
   handleMouseUp = (e: MouseEvent) => {
     if (e.button === 0) {
+        this.isLeftMouseDown = false;
         this.isSniperMode = false;
     }
   };
@@ -234,7 +237,7 @@ export class GameScreen extends Screen {
     
     if (inputManager.isPointerLockCaptured()) {
         const sensitivity = 0.003;
-        this.cameraYaw -= data.movementX * sensitivity;
+        this.cameraYaw += data.movementX * sensitivity;
         this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - data.movementY * sensitivity));
         this.lastMouseManualTS = Date.now();
     }
@@ -257,7 +260,7 @@ export class GameScreen extends Screen {
     this.intent.moveDir.x = Math.max(-1, Math.min(1, moveX));
     this.intent.moveDir.y = Math.max(-1, Math.min(1, moveY));
 
-    this.intent.isFiringNormal = this.virtualFireNormal || inputManager.isActiveAction('FIRE') || (inputManager.isMouseDown() && !this.rightClickFire);
+    this.intent.isFiringNormal = this.virtualFireNormal || inputManager.isActiveAction('FIRE') || this.isLeftMouseDown;
     this.intent.isFiringGrenade = this.virtualFireGrenade || this.rightClickFire || inputManager.isActiveAction('FIRE_ALT');
 
     const tankP = this.tank.physicsBody.body.GetPosition();
@@ -301,12 +304,12 @@ export class GameScreen extends Screen {
     );
     
     if (shots.normal) {
-       this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 35);
+       this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 1.0, 35);
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.SHELL);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.08);
     }
     if (shots.grenade) {
-       this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 100);
+       this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 1.0, 100);
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.GRENADE);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.18);
     }

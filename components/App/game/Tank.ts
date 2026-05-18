@@ -150,18 +150,24 @@ export class Tank {
     const steer = (Math.abs(moveDir.x) < 0.05) ? 0 : -moveDir.x;
 
     // Responsive Acceleration & Braking
-    const TANK_MAX_SPEED = 14.0; 
+    const TANK_MAX_SPEED = 16.0; // Slightly faster for better feel
     let targetSpeed = throttle * TANK_MAX_SPEED;
     
     // Check if we are braking (trying to go opposite of current speed)
     const isBraking = (throttle > 0 && this.speed < -0.1) || (throttle < 0 && this.speed > 0.1);
-    const linearAccel = throttle !== 0 ? (isBraking ? 4.5 : 2.5) : 1.2; 
+    
+    // Dynamic Acceleration: faster when starting, very fast when braking
+    const linearAccel = throttle !== 0 
+        ? (isBraking ? 6.0 : 3.5) 
+        : (Math.abs(this.speed) > 0.1 ? 2.5 : 1.2); // Stronger engine braking when letting go
     
     this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
 
     // ANGULAR SPEED (Rotation - heavy pivot feel)
-    const pivotBoost = Math.abs(this.speed) < 3.0 ? 1.5 : 0.9;
-    const targetTurnSpeed = steer * 1.5 * pivotBoost; 
+    // A tank should turn fastest when nearly stationary
+    const speedRatio = Math.abs(this.speed) / TANK_MAX_SPEED;
+    const pivotBoost = 1.0 + (1.0 - speedRatio) * 1.2; 
+    const targetTurnSpeed = steer * 1.8 * pivotBoost; 
     this.rotation += targetTurnSpeed * (ts / 1000);
     this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
@@ -176,7 +182,7 @@ export class Tank {
     const physPitch = Math.asin(UT.CLAMP(-m[5], -1, 1));
     const physRoll = Math.atan2(m[3], m[4]);
 
-    // Apply arcade yaw + physical tilt (dampened for stability)
+    // Apply arcade yaw + physical tilt (dampened for stability to avoid jitter)
     const targetQuat = Quaternion.createFromEuler(this.rotation, physPitch, physRoll, 'YXZ');
     const joltQuatSet = new Gfx3Jolt.Quat(targetQuat.x, targetQuat.y, targetQuat.z, targetQuat.w);
     gfx3JoltManager.bodyInterface.SetRotation(this.physicsBody.body.GetID(), joltQuatSet, Gfx3Jolt.EActivation_Activate);
@@ -190,8 +196,9 @@ export class Tank {
     
     // Maintain vertical velocity from physics to handle gravity naturally, 
     // but add a "Slope assist" to pull the tank up/down ramps manually to avoid separation
+    // Reduced bias to prevent "launching" off small bumps
     const verticalSlopeAssist = forward[1] * this.speed;
-    const newVelY = currentJoltVel.GetY() + verticalSlopeAssist * 0.5;
+    const newVelY = currentJoltVel.GetY() * 0.8 + verticalSlopeAssist * 0.4;
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
@@ -205,11 +212,11 @@ export class Tank {
     this.velocity = this.speed; 
     
     // Smooth the acceleration-based tilt (Pitch)
-    const targetTilt = -acceleration * 0.012; 
-    this.chassisTilt = UT.LERP(this.chassisTilt, targetTilt, 8.0 * (ts / 1000));
+    const targetTilt = -acceleration * 0.01; // Slightly reduced sensitivity for stability
+    this.chassisTilt = UT.LERP(this.chassisTilt, targetTilt, 10.0 * (ts / 1000));
     
     // Add firing lurch (nose up when firing)
-    const firingLurch = this.recoil * 0.08;
+    const firingLurch = this.recoil * 0.12; // More pronounced firing impact
     const finalTilt = Math.max(-0.25, Math.min(0.25, this.chassisTilt - firingLurch));
 
     // Teleport if out of bounds

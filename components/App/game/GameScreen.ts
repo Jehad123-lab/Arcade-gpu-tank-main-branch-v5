@@ -271,12 +271,12 @@ export class GameScreen extends Screen {
     if (shots.normal) {
        this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player');
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.SHELL);
-       this.shakeIntensity = Math.max(this.shakeIntensity, 0.12);
+       this.shakeIntensity = Math.max(this.shakeIntensity, 0.08);
     }
     if (shots.grenade) {
        this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player');
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.GRENADE);
-       this.shakeIntensity = Math.max(this.shakeIntensity, 0.25);
+       this.shakeIntensity = Math.max(this.shakeIntensity, 0.18);
     }
 
     const tankP = this.tank.physicsBody.body.GetPosition();
@@ -375,7 +375,7 @@ export class GameScreen extends Screen {
   handleTankMuzzleFlash(pos: vec3, forward: vec3, type: ProjectileType) {
     const exp = this.explosionPool.acquire() as Explosion;
     if (exp) {
-        exp.reset(pos[0], pos[1], pos[2], type === ProjectileType.GRENADE ? [1.0, 0.5, 0.2] : [1.0, 0.9, 0.3], forward, type === ProjectileType.GRENADE ? 1.8 : 0.8, 'muzzle');
+        exp.reset(pos[0], pos[1], pos[2], type === ProjectileType.GRENADE ? [1.0, 0.5, 0.2] : [1.0, 0.9, 0.3], forward, type === ProjectileType.GRENADE ? 1.2 : 0.5, 'muzzle');
         this.explosions.push(exp);
     }
   }

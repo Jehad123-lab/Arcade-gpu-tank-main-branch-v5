@@ -286,12 +286,20 @@ export class Tank {
     syncToTurret(this.hatch, [0, 0.45, 0.3]);
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
-    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.4, 1]);
+    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -2.4, 1]);
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, muzzleLocalPos);
     const muzzleWorldPos: vec3 = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
     
-    const muzzleWorldDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, new Float32Array([0, 0, -1, 0]));
-    const muzzleWorldDir = UT.VEC3_NORMALIZE([muzzleWorldDirVec4[0], muzzleWorldDirVec4[1], muzzleWorldDirVec4[2]]);
+    // Use the same TIP position to calculate world direction for consistency
+    const tipLocalPos: vec4 = new Float32Array([0, 0, -3.0, 1]);
+    const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, tipLocalPos);
+    const tipWorldPos: vec3 = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
+    
+    const muzzleWorldDir = UT.VEC3_NORMALIZE([
+        tipWorldPos[0] - muzzleWorldPos[0],
+        tipWorldPos[1] - muzzleWorldPos[1],
+        tipWorldPos[2] - muzzleWorldPos[2]
+    ]);
     
     return { 
       normal: didShootNormal, 

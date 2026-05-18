@@ -27,6 +27,7 @@ export class Tank {
   physicsBody: any;
   velocity: number = 0;
   speed: number = 0;
+  rotVel: number = 0; // Rotational velocity
   sens: number = 0;
   newSens: number = 0;
   wheelAngle: number = 0;
@@ -170,15 +171,21 @@ export class Tank {
 
         // Rotate chassis towards target direction
         const speedRatio = Math.abs(this.speed) / TANK_MAX_SPEED;
-        const pivotBoost = 1.0 + (1.0 - Math.min(1.0, speedRatio)) * 1.5; 
-        const maxTurn = 2.0 * pivotBoost * (ts / 1000); 
-
-        if (Math.abs(yawDiff) > maxTurn) {
-            this.rotation += Math.sign(yawDiff) * maxTurn;
-        } else {
-            this.rotation = targetWorldYaw;
-        }
         
+        // Rotational Inertia Logic
+        // Pivot faster when slow, slower and wider when moving fast
+        const turnAuthority = 1.0 - (speedRatio * 0.4); 
+        const turnAccel = 25.0 * turnAuthority; 
+        const turnDamping = 12.0;
+
+        // Calculate torque needed to reach target direction
+        let targetRotVel = yawDiff * turnAccel;
+        // Clamp turn speed to prevent crazy spinning
+        const maxRotVel = 4.5 * turnAuthority;
+        targetRotVel = Math.max(-maxRotVel, Math.min(maxRotVel, targetRotVel));
+
+        this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-turnDamping * (ts / 1000)));
+        this.rotation += this.rotVel * (ts / 1000);
         this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
         // Calculate alignment to apply gradual speed (auto-slowdown during sharp turns)
@@ -188,17 +195,22 @@ export class Tank {
         let targetSpeed = isReversing ? -maxCurrentSpeed : maxCurrentSpeed;
 
         // If wildly turning, slow down significantly to allow pivot
-        if (Math.abs(yawDiff) > Math.PI / 3) {
-             targetSpeed *= 0.2; 
+        if (Math.abs(yawDiff) > Math.PI / 2.5) {
+             targetSpeed *= 0.15; 
         }
         
         const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
-        const linearAccel = isBraking ? 6.0 : 3.5;
-        this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
+        
+        // Power curve for acceleration (Torque feel)
+        const accelAlpha = isBraking ? 8.0 : 4.5;
+        this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-accelAlpha * (ts / 1000)));
         
     } else {
-        // Braking
-        this.speed = UT.LERP(this.speed, 0, 1.0 - Math.exp(-5.0 * (ts / 1000)));
+        // Braking and stopping rotation
+        this.speed = UT.LERP(this.speed, 0, 1.0 - Math.exp(-6.0 * (ts / 1000)));
+        this.rotVel = UT.LERP(this.rotVel, 0, 1.0 - Math.exp(-10.0 * (ts / 1000)));
+        this.rotation += this.rotVel * (ts / 1000);
+        this.rotation = UT.CLAMP_ANGLE(this.rotation);
     }
 
     // 2. JOLT PHYSICS SYNC

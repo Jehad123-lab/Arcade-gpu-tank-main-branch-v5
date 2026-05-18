@@ -37,6 +37,7 @@ Hello! You are an AI assistant helping to build this React application. Here are
 -   `LLM.md`
 -   `noteBook.md`
 -   `bugReport.md`
+-   `TANK_SYSTEM_DESIGN.md`
 
 ## Simple Rules (ELI10 Version)
 

@@ -356,7 +356,13 @@ export class GameScreen extends Screen {
     }
 
 
-    const finalTargetDist = this.isSniperMode ? 6.0 : this.targetCameraDistance;
+    // DYNAMIC CAMERA FOV & DISTANCE
+    const speedFactor = Math.min(1.0, Math.abs(this.tank.speed) / 16.0);
+    const targetFOV = 0.785 + (speedFactor * 0.15); // ~45deg + speed boost
+    this.camera.setFieldOfView(UT.LERP(this.camera.getFieldOfView(), targetFOV, 1.0 - Math.exp(-2.0 * (ts/1000))));
+
+    const speedDistOffset = speedFactor * 3.0;
+    const finalTargetDist = (this.isSniperMode ? 6.0 : this.targetCameraDistance) + speedDistOffset;
     this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
 
     // OVER-THE-SHOULDER CAMERA LOGIC

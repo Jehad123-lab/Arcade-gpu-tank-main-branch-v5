@@ -14,6 +14,9 @@ A log of all tasks, ideas, and progress for this project.
 
 ## Done
 
+-   **[2026-05-18 10:40]**: Substantially improved tank movement controls. Added rotational inertia (acceleration/damping) for a weightier feel, implemented speed-scaled turn authority, and added dynamic camera feedback (FOV and Distance scaling) that responds to movement speed.
+-   **[2026-05-18 10:38]**: Fixed the issue where pressing W/S caused unrealistic chassis tilting, fulfilling the user's request for a stable firing platform.
+-   **[2026-05-18 10:35]**: Authored `/TANK_SYSTEM_DESIGN.md`, a comprehensive technical guide explaining the gameplay engineering, physics, and "game feel" behind modern AAA tank controllers.
 -   **[2026-05-18 09:35]**: Implemented Camera-Relative "Twin-Stick/Halo-style" Controls for the Tank. W always moves forward relative to the camera, S moves backward, A/D strafe left and right. The chassis automatically rotates smoothly to match the movement direction, and seamlessly enters reverse driving when the target angle is behind the tank. This solves the "curly/clunky" tank axles control issues.
 -   **[2026-05-18 09:25]**: Significantly enhanced tank movement responsiveness. Implemented a higher `TANK_MAX_SPEED` (16.0) and a more aggressive acceleration/braking model. Tuned "pivot turns" to allow much faster rotation when slow or stationary. Refined slope alignment logic for greater stability on uneven terrain.
 -   **[2026-05-17 10:56]**: Fixed `ReferenceError: forwardVecActual is not defined` in `Tank.ts` caused by an incomplete variable rename during the movement system overhaul.

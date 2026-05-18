@@ -9,7 +9,8 @@ import { createBoxMesh, createUnitBoxMesh } from './GameUtils';
 export enum EnemyType {
   STANDARD = 'standard',
   SCOUT = 'scout',
-  HEAVY = 'heavy'
+  HEAVY = 'heavy',
+  ELITE = 'elite'
 }
 
 export enum EnemyState {
@@ -28,42 +29,58 @@ interface EnemyStats {
   damage: number;
   chassisColor: [number, number, number];
   turretColor: [number, number, number];
+  accentColor: [number, number, number];
   scale: number;
 }
 
 const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.STANDARD]: {
-    hp: 100,
-    maxHp: 100,
-    speed: 10,
-    rotSpeed: 1.0,
-    shootInterval: 2.5,
+    hp: 120,
+    maxHp: 120,
+    speed: 12,
+    rotSpeed: 1.2,
+    shootInterval: 2.2,
     damage: 35,
-    chassisColor: [0.45, 0.55, 0.35],
-    turretColor: [0.4, 0.5, 0.3],
+    chassisColor: [0.15, 0.15, 0.15], // Dark Charcoal
+    turretColor: [0.2, 0.2, 0.2],
+    accentColor: [1.0, 0.4, 0.0], // Neon Orange
     scale: 1.0
   },
   [EnemyType.SCOUT]: {
-    hp: 50,
-    maxHp: 50,
-    speed: 18,
-    rotSpeed: 2.0,
-    shootInterval: 1.2,
+    hp: 60,
+    maxHp: 60,
+    speed: 22,
+    rotSpeed: 2.5,
+    shootInterval: 1.0,
     damage: 15,
-    chassisColor: [0.3, 0.4, 0.6], // Blueish
-    turretColor: [0.25, 0.35, 0.55],
+    chassisColor: [0.1, 0.1, 0.1],
+    turretColor: [0.15, 0.1, 0.2],
+    accentColor: [0.7, 0.2, 1.0], // Neon Purple
     scale: 0.8
   },
   [EnemyType.HEAVY]: {
-    hp: 250,
-    maxHp: 250,
-    speed: 6,
-    rotSpeed: 0.5,
-    shootInterval: 4.0,
-    damage: 70,
-    chassisColor: [0.5, 0.3, 0.3], // Reddish
-    turretColor: [0.45, 0.25, 0.25],
-    scale: 1.4
+    hp: 350,
+    maxHp: 350,
+    speed: 7,
+    rotSpeed: 0.6,
+    shootInterval: 3.5,
+    damage: 80,
+    chassisColor: [0.05, 0.05, 0.05],
+    turretColor: [0.1, 0.05, 0.05],
+    accentColor: [1.0, 0.0, 0.0], // Threat Red
+    scale: 1.5
+  },
+  [EnemyType.ELITE]: {
+    hp: 600,
+    maxHp: 600,
+    speed: 14,
+    rotSpeed: 1.5,
+    shootInterval: 0.8,
+    damage: 40,
+    chassisColor: [0.0, 0.0, 0.0],
+    turretColor: [0.1, 0.1, 0.1],
+    accentColor: [0.0, 1.0, 0.5], // Toxic Green
+    scale: 1.3
   }
 };
 
@@ -72,52 +89,46 @@ const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
  * It uses static shared meshes for better performance across many instances.
  */
 export class Enemy {
-  static bodyMesh: Gfx3Mesh;
-  static turretMesh: Gfx3Mesh;
-  static barrelMesh: Gfx3Mesh;
+  static bodyMeshes: Record<string, Gfx3Mesh> = {};
+  static turretMeshes: Record<string, Gfx3Mesh> = {};
+  static barrelMeshes: Record<string, Gfx3Mesh> = {};
   static trackLMesh: Gfx3Mesh;
   static trackRMesh: Gfx3Mesh;
   static engineMesh: Gfx3Mesh;
   static hatchMesh: Gfx3Mesh;
   static antennaMesh: Gfx3Mesh;
-  static projMesh: Gfx3Mesh;
-  static hpGreen: Gfx3Mesh;
-  static hpRed: Gfx3Mesh;
+  static accentGlowMesh: Gfx3Mesh;
   static initialized = false;
 
-  /**
-   * Initializes shared meshes for all enemy instances.
-   */
   static async initMeshes() {
     if (Enemy.initialized) return;
     
-    const bodyJSM = new Gfx3MeshJSM();
-    const turretJSM = new Gfx3MeshJSM();
-    const barrelJSM = new Gfx3MeshJSM();
+    // Create detailed parts
+    Enemy.trackLMesh = createBoxMesh(0.7, 1.0, 3.8, [0.05, 0.05, 0.05]);
+    Enemy.trackRMesh = createBoxMesh(0.7, 1.0, 3.8, [0.05, 0.05, 0.05]);
+    Enemy.engineMesh = createBoxMesh(1.8, 0.6, 1.0, [0.1, 0.1, 0.1]);
+    Enemy.hatchMesh = createBoxMesh(0.6, 0.15, 0.6, [0.1, 0.1, 0.1]);
+    Enemy.antennaMesh = createBoxMesh(0.05, 1.8, 0.05, [0.4, 0.4, 0.4]);
+    Enemy.accentGlowMesh = createBoxMesh(0.3, 0.3, 0.3, [1, 1, 1]);
 
-    try {
-      await Promise.all([
-        bodyJSM.loadFromFile('models/tank_body.jsm'),
-        turretJSM.loadFromFile('models/tank_turret.jsm'),
-        barrelJSM.loadFromFile('models/tank_barrel.jsm')
-      ]);
+    // Define unique chassis per type
+    const createChassis = (w: number, h: number, d: number) => createBoxMesh(w, h, d, [1, 1, 1]);
+    
+    Enemy.bodyMeshes[EnemyType.STANDARD] = createChassis(2.4, 0.9, 3.4);
+    Enemy.turretMeshes[EnemyType.STANDARD] = createBoxMesh(1.6, 0.7, 1.6, [1, 1, 1]);
+    Enemy.barrelMeshes[EnemyType.STANDARD] = createBoxMesh(0.3, 0.3, 2.3, [1, 1, 1]);
 
-      Enemy.bodyMesh = bodyJSM;
-      Enemy.turretMesh = turretJSM;
-      Enemy.barrelMesh = barrelJSM;
-    } catch (e) {
-      console.warn('Enemy: Failed to load JSM models, falling back to boxes.', e);
-      Enemy.bodyMesh = createBoxMesh(2.25, 0.9, 3.3, [1, 1, 1]);
-      Enemy.turretMesh = createBoxMesh(1.65, 0.75, 1.65, [1, 1, 1]);
-      Enemy.barrelMesh = createBoxMesh(0.3, 0.3, 2.25, [1, 1, 1]);
-    }
+    Enemy.bodyMeshes[EnemyType.SCOUT] = createBoxMesh(1.8, 0.7, 2.8, [1, 1, 1]); // Sleeker
+    Enemy.turretMeshes[EnemyType.SCOUT] = createBoxMesh(1.2, 0.5, 1.2, [1, 1, 1]);
+    Enemy.barrelMeshes[EnemyType.SCOUT] = createBoxMesh(0.15, 0.15, 1.8, [1, 1, 1]);
 
-    Enemy.trackLMesh = createBoxMesh(0.6, 0.9, 3.6, [0.15, 0.15, 0.15]);
-    Enemy.trackRMesh = createBoxMesh(0.6, 0.9, 3.6, [0.15, 0.15, 0.15]);
-    Enemy.engineMesh = createBoxMesh(1.8, 0.6, 0.9, [0.2, 0.2, 0.2]);
-    Enemy.hatchMesh = createBoxMesh(0.6, 0.15, 0.6, [0.15, 0.15, 0.15]);
-    Enemy.antennaMesh = createBoxMesh(0.05, 1.5, 0.05, [0.1, 0.1, 0.1]);
-    Enemy.projMesh = createBoxMesh(0.6, 0.6, 0.6, [1.0, 0.2, 0.0]);
+    Enemy.bodyMeshes[EnemyType.HEAVY] = createBoxMesh(3.2, 1.2, 4.2, [1, 1, 1]); // Massive
+    Enemy.turretMeshes[EnemyType.HEAVY] = createBoxMesh(2.2, 0.9, 2.2, [1, 1, 1]);
+    Enemy.barrelMeshes[EnemyType.HEAVY] = createBoxMesh(0.5, 0.5, 2.8, [1, 1, 1]);
+
+    Enemy.bodyMeshes[EnemyType.ELITE] = createBoxMesh(2.8, 1.0, 3.8, [1, 1, 1]); 
+    Enemy.turretMeshes[EnemyType.ELITE] = createBoxMesh(1.8, 0.8, 1.8, [1, 1, 1]);
+    Enemy.barrelMeshes[EnemyType.ELITE] = createBoxMesh(0.35, 0.35, 2.5, [1, 1, 1]);
 
     Enemy.initialized = true;
   }
@@ -373,20 +384,29 @@ export class Enemy {
 
     const bodyMatrix = UT.MAT4_TRANSFORM(origin, ZERO, scale, finalVisualQ);
     
-    // Tint meshes
-    Enemy.bodyMesh.setTag(0, 1, this.stats.chassisColor[0], this.stats.chassisColor[1], this.stats.chassisColor[2]);
-    Enemy.turretMesh.setTag(0, 1, this.stats.turretColor[0], this.stats.turretColor[1], this.stats.turretColor[2]);
+    const bodyMesh = Enemy.bodyMeshes[this.type];
+    const turretMesh = Enemy.turretMeshes[this.type];
+    const barrelMesh = Enemy.barrelMeshes[this.type];
 
-    gfx3MeshRenderer.drawMesh(Enemy.bodyMesh, bodyMatrix);
+    // Tint meshes
+    bodyMesh.setTag(0, 1, this.stats.chassisColor[0], this.stats.chassisColor[1], this.stats.chassisColor[2]);
+    turretMesh.setTag(0, 1, this.stats.turretColor[0], this.stats.turretColor[1], this.stats.turretColor[2]);
+    Enemy.accentGlowMesh.setTag(0, 1, this.stats.accentColor[0], this.stats.accentColor[1], this.stats.accentColor[2]);
+
+    gfx3MeshRenderer.drawMesh(bodyMesh, bodyMatrix);
 
     const syncRigid = (mesh: Gfx3Mesh, localPos: vec3) => {
         const localMatrix = UT.MAT4_TRANSFORM([localPos[0]*s, localPos[1]*s, localPos[2]*s], [0, 0, 0], scale, new Quaternion());
         gfx3MeshRenderer.drawMesh(mesh, UT.MAT4_MULTIPLY(bodyMatrix, localMatrix));
     };
 
-    syncRigid(Enemy.trackLMesh, [-1.425, -0.15, 0]);
-    syncRigid(Enemy.trackRMesh, [1.425, -0.15, 0]);
+    syncRigid(Enemy.trackLMesh, [-1.55, -0.15, 0]);
+    syncRigid(Enemy.trackRMesh, [1.55, -0.15, 0]);
     syncRigid(Enemy.engineMesh, [0, 0.3, 1.8]);
+    
+    // Glowing eyes/sensors
+    syncRigid(Enemy.accentGlowMesh, [0.6, 0.4, -1.6]);
+    syncRigid(Enemy.accentGlowMesh, [-0.6, 0.4, -1.6]);
 
     const currentForward = finalVisualQ.rotateVector([0, 0, -1]);
     const currentYaw = Math.atan2(-currentForward[0], -currentForward[2]);
@@ -395,11 +415,11 @@ export class Enemy {
 
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4()); 
-    gfx3MeshRenderer.drawMesh(Enemy.turretMesh, turretMatrix);
+    gfx3MeshRenderer.drawMesh(turretMesh, turretMatrix);
 
     const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
     const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, (-1.2 * s) + visualRecoilValue));
-    gfx3MeshRenderer.drawMesh(Enemy.barrelMesh, barrelPivotMatrix);
+    gfx3MeshRenderer.drawMesh(barrelMesh, barrelPivotMatrix);
     
     const syncToTurret = (mesh: Gfx3Mesh, localPos: vec3) => {
         const localMatrix = UT.MAT4_TRANSLATE(localPos[0]*s, localPos[1]*s, localPos[2]*s);
@@ -408,5 +428,8 @@ export class Enemy {
 
     syncToTurret(Enemy.hatchMesh, [0, 0.45, 0.3]);
     syncToTurret(Enemy.antennaMesh, [-0.6, 1.125, 0.6]);
+    
+    // Turret sensor glow
+    syncToTurret(Enemy.accentGlowMesh, [0.4, 0.3, -0.8]);
   }
 }

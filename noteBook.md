@@ -14,6 +14,7 @@ A log of all tasks, ideas, and progress for this project.
 
 ## Done
 
+-   **[2026-05-18 11:15]**: Overhauled Enemy design. Implemented type-specific high-fidelity meshes (Sleek Scouts, Heavy Juggernauts, Spike-turreted Elites). Adopted a "Hunter" aesthetic with dark achromatic bases and neon emissive accents (Orange, Purple, Red, Green). Added glowing sensor "eyes" to enhance threat visibility and personality.
 -   **[2026-05-18 11:09]**: Fixed reversed steering polarity (D now correctly turns Right, A turns Left) and verified input axis mapping to ensure W/S reliably drives the tank forward/backward relative to its current chassis orientation.
 -   **[2026-05-18 11:02]**: Implemented Classic Tank Controls. WASD now operates relative to the tank chassis (W/S for throttle, A/D for independent rotation), decoupling the hull's movement from the camera orientation while maintaining independent turret aiming.
 -   **[2026-05-18 10:55]**: Refactored tank movement into a "Pivot-First" system. Removed automatic reverse-driving logic to ensure the hull always faces the direction of travel (leading with the front), increased rotational authority, and added a steep speed penalty for misalignment to force the tank to position its body before accelerating.

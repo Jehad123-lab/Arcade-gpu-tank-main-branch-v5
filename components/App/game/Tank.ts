@@ -269,14 +269,12 @@ export class Tank {
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
     
     let newVelX = forward[0] * this.speed;
-    let newVelY = currentJoltVel.GetY();
+    let newVelY = currentJoltVel.GetY(); // Trust Jolt for Y velocity
     let newVelZ = forward[2] * this.speed;
 
-    if (isGrounded) {
-       newVelY = forward[1] * this.speed;
-       if (this.speed !== 0 || Math.abs(groundNormal[1]) < 0.99) {
-           newVelY -= 0.2; // small downward pressure to stick to slopes, 2.0 was too violent
-       }
+    // Optional: add a tiny bit of downforce only if we are moving fast, to prevent flying off small bumps
+    if (isGrounded && Math.abs(this.speed) > 5) {
+        newVelY -= 1.0; 
     }
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
@@ -331,34 +329,22 @@ export class Tank {
     syncRigid(this.trackR, [1.425, -0.15, 0]);
     syncRigid(this.engine, [0, 0.3, 1.8]);
 
-    // 3. INDEPENDENT TURRET (Aligns to aim direction accounting for chassis tilt)
-    const aimRotQ = Quaternion.createFromEuler(aimYaw, aimPitch, 0, 'YXZ');
-    const globalAimDir = aimRotQ.rotateVector([0, 0, -1]);
-    
-    const invChassisQ = finalVisualQ.inverse();
-    const localAimDir = invChassisQ.rotateVector(globalAimDir);
-
-    const targetLocalYaw = Math.atan2(-localAimDir[0], -localAimDir[2]);
-    const targetLocalPitch = Math.asin(localAimDir[1]);
-
-    // Instantly snap to target yaw to follow camera "no matter what"
-    this.turretYaw = targetLocalYaw;
-    
+    // 3. INDEPENDENT TURRET (Matches Camera Yaw)
+    // We simply subtract the tank's base yaw so that when combined, the global yaw matches the camera.
+    this.turretYaw = aimYaw - this.rotation;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
     this.turret.enableManualTransform(turretMatrix);
  
-    // BARREL PITCH (Instantly follow, invert pitch as requested)
-    // The user requested to "invert rotation angle of the canon"
-    const invertedTargetPitch = -targetLocalPitch; 
+    // BARREL PITCH (Matches Camera Pitch)
+    // "copy the camera rotation to the canon" & "invert rotation angle"
+    this.barrelPitch = -aimPitch; 
     
-    // We remove the tight clamp so it points exactly where the camera looks, 
-    // but a wide clamp prevents it from clipping through the tank body completely.
-    const maxDepress = -1.5; 
-    const maxElevate = 1.5;
-    this.barrelPitch = Math.max(maxDepress, Math.min(maxElevate, invertedTargetPitch));
+    const maxDepress = -0.5; 
+    const maxElevate = 1.0;
+    this.barrelPitch = Math.max(maxDepress, Math.min(maxElevate, this.barrelPitch));
     
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 

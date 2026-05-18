@@ -14,6 +14,7 @@ A log of all tasks, ideas, and progress for this project.
 
 ## Done
 
+-   **[2026-05-18 10:44]**: Fixed a runtime error `TypeError: this.camera.getFieldOfView is not a function`. The correct methods in the ArcadeGPU engine are `getPerspectiveFovy` and `setPerspectiveFovy`. Corrected these in `GameScreen.ts`.
 -   **[2026-05-18 10:40]**: Substantially improved tank movement controls. Added rotational inertia (acceleration/damping) for a weightier feel, implemented speed-scaled turn authority, and added dynamic camera feedback (FOV and Distance scaling) that responds to movement speed.
 -   **[2026-05-18 10:38]**: Fixed the issue where pressing W/S caused unrealistic chassis tilting, fulfilling the user's request for a stable firing platform.
 -   **[2026-05-18 10:35]**: Authored `/TANK_SYSTEM_DESIGN.md`, a comprehensive technical guide explaining the gameplay engineering, physics, and "game feel" behind modern AAA tank controllers.

@@ -147,22 +147,25 @@ export class Tank {
     if (this.grenadeRecoil < 0) this.grenadeRecoil = 0;
     
     // 1. TANK MOVEMENT LOGIC (Classic Tank Controls)
-    const TANK_MAX_SPEED = 16.0;
-    const MAX_ROT_VEL = 4.5;
+    const TANK_MAX_SPEED = 18.0;
+    const MAX_ROT_VEL = 3.5;
     
+    // W/S corresponds to moveDir.y (Throttle)
+    // A/D corresponds to moveDir.x (Steering)
     const throttle = moveDir.y; 
-    const steer = moveDir.x; 
+    const steer = -moveDir.x; // Flip steer to make D = Right turn
 
     if (Math.abs(throttle) > 0.05 || Math.abs(steer) > 0.05) {
         // Rotation (Independent of camera direction)
-        const turnAuthority = 1.0 - (Math.abs(this.speed) / TANK_MAX_SPEED * 0.5);
+        // High rotation speed at low speed, wider turns at high speed
+        const turnAuthority = 1.0 - (Math.abs(this.speed) / TANK_MAX_SPEED * 0.4);
         const targetRotVel = steer * MAX_ROT_VEL * turnAuthority;
-        this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-12.0 * (ts / 1000)));
+        this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-10.0 * (ts / 1000)));
 
-        // Throttle (Always relative to current chassis orientation)
+        // Throttle (Relative to current chassis orientation)
         const targetSpeed = throttle * TANK_MAX_SPEED;
         const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
-        const accelAlpha = isBraking ? 12.0 : 5.0; 
+        const accelAlpha = isBraking ? 12.0 : 6.0; 
         this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-accelAlpha * (ts / 1000)));
     } else {
         // Braking and stopping rotation

@@ -109,74 +109,77 @@ export class Explosion implements Poolable<Explosion> {
             }
             
         } else if (type === 'trail') {
-            // Trail: multiple particles for a denser wake
-            const numParticles = Math.max(1, Math.floor(2 * scaleMultiplier));
+            // Trail: Yellow glowing blocks
+            const numParticles = 1;
             for (let i = 0; i < numParticles; i++) {
                 const pos: vec3 = [
-                    x + (Math.random() - 0.5) * 0.2, 
-                    y + (Math.random() - 0.5) * 0.2, 
-                    z + (Math.random() - 0.5) * 0.2
+                    x + (Math.random() - 0.5) * 0.1, 
+                    y + (Math.random() - 0.5) * 0.1, 
+                    z + (Math.random() - 0.5) * 0.1
                 ];
                 
-                // Directional drift + tiny randomization
-                let vel: vec3 = [0, 0, 0];
-                if (direction) {
-                    // inherit some of the projectile velocity but slowed down
-                    vel = UT.VEC3_SCALE(direction, 0.15); 
-                }
+                const vel: vec3 = [
+                    (Math.random() - 0.5) * 0.5,
+                    (Math.random() - 0.5) * 0.5,
+                    (Math.random() - 0.5) * 0.5
+                ];
                 
-                vel[0] += (Math.random() - 0.5) * 0.8;
-                vel[1] += (Math.random() - 0.5) * 0.8;
-                vel[2] += (Math.random() - 0.5) * 0.8;
-                
-                const life = 0.6 + Math.random() * 0.6;
+                const life = 0.4 + Math.random() * 0.3;
                 this.particles.push({ 
                     pos, vel, life, maxLife: life, 
-                    colorIdx: Math.random() < 0.2 ? 0 : 3, 
-                    scaleMultiplier: scaleMultiplier * (0.6 + Math.random() * 0.4), 
-                    type: Math.random() < 0.2 ? 'fire' : 'smoke' 
+                    colorIdx: Math.random() < 0.7 ? 1 : 0, // Brightest yellow or yellow
+                    scaleMultiplier: scaleMultiplier * (0.8 + Math.random() * 0.4), 
+                    type: 'fire' 
                 });
             }
         } else {
-            // Muzzle or normal explosion
-            const numParticles = Math.floor((direction ? 12 : 20) * (scaleMultiplier >= 2 ? 1.5 : scaleMultiplier));
+            // Muzzle or normal explosion (Hit effects)
+            const numParticles = Math.floor(25 * scaleMultiplier);
 
             if (type === 'muzzle') {
                 this.particles.push({ 
                     pos: [x, y, z], vel: [0, 0, 0], 
                     life: 0.1, maxLife: 0.1, 
                     colorIdx: 1, 
-                    scaleMultiplier: scaleMultiplier * 2.0, 
+                    scaleMultiplier: scaleMultiplier * 3.0, 
                     type: 'flash' 
                 });
             }
 
             for (let i = 0; i < numParticles; i++) {
-                const pos: vec3 = [x + (Math.random() - 0.5) * 0.5 * scaleMultiplier, y + (Math.random() - 0.5) * 0.5 * scaleMultiplier, z + (Math.random() - 0.5) * 0.5 * scaleMultiplier];
+                const pos: vec3 = [x + (Math.random() - 0.5) * 0.2, y + (Math.random() - 0.5) * 0.2, z + (Math.random() - 0.5) * 0.2];
                 
                 let vel: vec3;
                 let life: number;
 
                 if (direction) {
                     // Muzzle flash: cone spread
-                    const speed = (15 + Math.random() * 25) * ((scaleMultiplier > 1) ? 1.5 : 1);
-                    const spread = 0.8 * scaleMultiplier;
+                    const speed = (20 + Math.random() * 30) * scaleMultiplier;
+                    const spread = 0.5 * scaleMultiplier;
                     let dirX = direction[0] + (Math.random() - 0.5) * spread;
                     let dirY = direction[1] + (Math.random() - 0.5) * spread;
                     let dirZ = direction[2] + (Math.random() - 0.5) * spread;
                     vel = UT.VEC3_SCALE(UT.VEC3_NORMALIZE([dirX, dirY, dirZ]), speed);
-                    life = (0.1 + Math.random() * 0.2) * (scaleMultiplier > 1 ? 1.5 : 1);
+                    life = (0.15 + Math.random() * 0.2);
                 } else {
-                    // Explosion: spherical spread
-                    const speed = (8 + Math.random() * 15) * scaleMultiplier;
+                    // Explosion: violent blocky distribution
+                    const speed = (15 + Math.random() * 25) * scaleMultiplier;
                     let dirX = (Math.random() - 0.5) * 2;
-                    let dirY = (Math.random() - 0.5) * 2 + 0.5; // bias upwards
+                    let dirY = (Math.random() - 0.5) * 2;
                     let dirZ = (Math.random() - 0.5) * 2;
                     vel = UT.VEC3_SCALE(UT.VEC3_NORMALIZE([dirX, dirY, dirZ]), speed);
-                    life = (0.4 + Math.random() * 0.6) * (scaleMultiplier > 1 ? 1.5 : 1);
+                    life = (0.6 + Math.random() * 0.8);
                 }
                 
-                this.particles.push({ pos, vel, life, maxLife: life, colorIdx: Math.floor(Math.random() * 3), scaleMultiplier, type: 'fire' });
+                // Mix in red (colorKey3 or custom) for hits
+                // colorIdx 0, 1, 2 are yellow variations. 3, 4 are smoke.
+                // Reset colors to yellow/red for hits
+                this.particles.push({ 
+                    pos, vel, life, maxLife: life, 
+                    colorIdx: Math.random() < 0.6 ? 1 : (Math.random() < 0.5 ? 2 : 0), 
+                    scaleMultiplier: scaleMultiplier * (1.0 + Math.random() * 2.0), 
+                    type: 'fire' 
+                });
             }
         }
     }
@@ -207,10 +210,10 @@ export class Explosion implements Poolable<Explosion> {
                     // stays in place
                 } else {
                     // fire
-                    p.vel[0] *= 0.85; // Heavy drag for an explosive "poof" stop
-                    p.vel[2] *= 0.85;
-                    p.vel[1] *= 0.85;
-                    p.vel[1] += 5 * dt; // Fire slightly rises
+                    p.vel[0] *= 0.96; // Reduced drag for blocky chips
+                    p.vel[2] *= 0.96;
+                    p.vel[1] *= 0.96;
+                    p.vel[1] += 2 * dt; // Slight rise
                 }
                 
                 p.pos[0] += p.vel[0] * dt;

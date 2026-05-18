@@ -90,19 +90,8 @@ export function createCylinderGeo(radius: number, height: number, segments: numb
 }
 
 export function createBulletMesh(): Gfx3Mesh {
-    const mainBody = createCylinderGeo(0.12, 1.2, 8, [0.7, 0.7, 0.7]); // Metallic grey
-    
-    const tip = createCylinderGeo(0.12, 0.4, 8, [0.8, 0.5, 0.2]); // Copper tip
-    
-    const tracer = createBoxGeo(0.1, 0.1, 0.1, [1.0, 0.8, 0.2]); // Bright glowing tracer spot at the back
-    
-    const matRot = UT.MAT4_ROTATE_X(Math.PI / 2);
-    
-    return combineGeos([
-        { geo: mainBody, matrix: UT.MAT4_MULTIPLY(UT.MAT4_TRANSLATE(0,0,0), matRot) },
-        { geo: tip, matrix: UT.MAT4_MULTIPLY(UT.MAT4_TRANSLATE(0, 0, -0.7), matRot) },
-        { geo: tracer, matrix: UT.MAT4_TRANSLATE(0, 0, 0.6) } // Back of the shell
-    ]);
+    const size = 0.5;
+    return createBoxMesh(size, size, size, [1.0, 1.0, 0.0]); // Bright yellow cube
 }
 
 export function combineGeos(geos: { geo: any, matrix: mat4 }[]): Gfx3Mesh {

@@ -445,8 +445,8 @@ export class GameScreen extends Screen {
         gfx3JoltManager.bodyInterface.SetGravityFactor(pBody.body.GetID(), 1.0); 
     }
 
-    let forwardSpeed = type === ProjectileType.GRENADE ? 45 : 135 + Math.random() * 15; // Randomized muzzle velocity
-    let upwardVel = type === ProjectileType.GRENADE ? 18 : 2.5; 
+    let forwardSpeed = type === ProjectileType.GRENADE ? 60 : 180; // Faster, consistent speed
+    let upwardVel = type === ProjectileType.GRENADE ? 20 : 0.5; // Flatter shell trajectory
     
     forwardSpeed *= speedMod;
 
@@ -493,11 +493,11 @@ export class GameScreen extends Screen {
         continue;
       }
       
-      if (p.life < 4.98 && Math.random() < 0.7) { // Increased trail frequency
+      if (p.life < 4.98) { // Solid trail
           const exp = this.explosionPool.acquire() as Explosion;
           if (exp) {
-              const trailColor: [number, number, number] = p.type === ProjectileType.GRENADE ? [0.6, 0.6, 0.6] : [0.9, 0.9, 0.8];
-              const trailScale = p.type === ProjectileType.GRENADE ? 1.8 : 0.8;
+              const trailColor = [1.0, 1.0, 0.0] as [number, number, number];
+              const trailScale = p.type === ProjectileType.GRENADE ? 1.5 : 0.6;
               const pVel = [curV.GetX(), curV.GetY(), curV.GetZ()] as vec3;
               exp.reset(pPos3[0], pPos3[1], pPos3[2], trailColor, pVel, trailScale, 'trail');
               this.explosions.push(exp);
@@ -567,7 +567,7 @@ export class GameScreen extends Screen {
           
           const exp = this.explosionPool.acquire() as Explosion;
           if (exp) {
-              exp.reset(hitPos[0], hitPos[1], hitPos[2], [1, 0.6, 0.2], undefined, p.type === ProjectileType.GRENADE ? 3.0 : 0.12);
+              exp.reset(hitPos[0], hitPos[1], hitPos[2], [1, 0.8, 0.0], undefined, p.type === ProjectileType.GRENADE ? 3.0 : 0.4);
               this.explosions.push(exp);
           }
 
@@ -582,7 +582,7 @@ export class GameScreen extends Screen {
           this.tank.hp -= dmg;
           const exp = this.explosionPool.acquire() as Explosion;
           if (exp) {
-              exp.reset(hitPos[0], hitPos[1], hitPos[2], [1, 0.1, 0.1], undefined, 0.2);
+              exp.reset(hitPos[0], hitPos[1], hitPos[2], [1, 0.1, 0.1], undefined, 0.5);
               this.explosions.push(exp);
           }
           this.tank.recoil = Math.max(this.tank.recoil, 0.5);
@@ -597,8 +597,8 @@ export class GameScreen extends Screen {
   onProjectileEnvironmentImpact(p: Projectile, pos: vec3) {
       const exp = this.explosionPool.acquire() as Explosion;
       if (exp) {
-          const color: [number, number, number] = p.type === ProjectileType.GRENADE ? [0.8, 0.4, 0.1] : [0.6, 0.6, 0.6];
-          exp.reset(pos[0], pos[1], pos[2], color, undefined, p.type === ProjectileType.GRENADE ? 4.0 : 1.0, p.type === ProjectileType.GRENADE ? 'grenade' : undefined);
+          const color: [number, number, number] = p.type === ProjectileType.GRENADE ? [1.0, 0.5, 0.0] : [1.0, 1.0, 0.0];
+          exp.reset(pos[0], pos[1], pos[2], color, undefined, p.type === ProjectileType.GRENADE ? 4.0 : 1.5, p.type === ProjectileType.GRENADE ? 'grenade' : undefined);
           this.explosions.push(exp);
       }
 

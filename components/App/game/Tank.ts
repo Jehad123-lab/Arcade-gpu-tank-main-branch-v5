@@ -173,36 +173,40 @@ export class Tank {
         const speedRatio = Math.abs(this.speed) / TANK_MAX_SPEED;
         
         // Rotational Inertia Logic
-        // Pivot faster when slow, slower and wider when moving fast
-        const turnAuthority = 1.0 - (speedRatio * 0.4); 
-        const turnAccel = 25.0 * turnAuthority; 
-        const turnDamping = 12.0;
+        // Very fast pivot when slow to feel "snappy" and heavy, wider arcs at high speed
+        const turnAuthority = 1.0 - (speedRatio * 0.6); 
+        const turnAccel = 45.0 * turnAuthority; 
+        const turnDamping = 16.0;
 
         // Calculate torque needed to reach target direction
         let targetRotVel = yawDiff * turnAccel;
-        // Clamp turn speed to prevent crazy spinning
-        const maxRotVel = 4.5 * turnAuthority;
+        // Increase max rotation speed for better responsiveness
+        const maxRotVel = 5.5 * turnAuthority;
         targetRotVel = Math.max(-maxRotVel, Math.min(maxRotVel, targetRotVel));
 
         this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-turnDamping * (ts / 1000)));
         this.rotation += this.rotVel * (ts / 1000);
         this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
-        // Calculate alignment to apply gradual speed (auto-slowdown during sharp turns)
+        // Calculate alignment to apply gradual speed (Heavy track traction feel)
+        // alignment is 1.0 when perfectly pointing at target, 0.0 at 90 deg.
         const alignment = Math.max(0, Math.cos(yawDiff));
+        // Quadratic scaling: if we are 45 deg off, we move at ~50% speed. 90 deg off = 0% speed.
+        // This forces the tank to "face where it goes" before it can accelerate fully.
+        const efficiency = Math.pow(alignment, 2.0); 
         
-        const maxCurrentSpeed = TANK_MAX_SPEED * alignment;
+        const maxCurrentSpeed = TANK_MAX_SPEED * efficiency;
         let targetSpeed = isReversing ? -maxCurrentSpeed : maxCurrentSpeed;
 
-        // If wildly turning, slow down significantly to allow pivot
-        if (Math.abs(yawDiff) > Math.PI / 2.5) {
-             targetSpeed *= 0.15; 
+        // Hard lock: If angle is > 45 degrees, prioritize pivoting by cutting speed to near zero
+        if (Math.abs(yawDiff) > Math.PI / 4) {
+             targetSpeed *= 0.05; 
         }
         
         const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
         
         // Power curve for acceleration (Torque feel)
-        const accelAlpha = isBraking ? 8.0 : 4.5;
+        const accelAlpha = isBraking ? 10.0 : 5.0; // Snappier braking
         this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-accelAlpha * (ts / 1000)));
         
     } else {

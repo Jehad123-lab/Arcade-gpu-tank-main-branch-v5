@@ -153,7 +153,12 @@ export class Tank {
     // W/S corresponds to moveDir.y (Throttle)
     // A/D corresponds to moveDir.x (Steering)
     const throttle = moveDir.y; 
-    const steer = -moveDir.x; // Fixed: Needs minus for D=Right turn (Negative Yaw)
+    let steer = -moveDir.x; // Fixed: Needs minus for D=Right turn (Negative Yaw)
+
+    // Reverse steering direction when backing up for intuitive control
+    if (this.speed < -0.1) {
+        steer = -steer;
+    }
 
     if (Math.abs(throttle) > 0.05 || Math.abs(steer) > 0.05) {
         // Rotation (Independent of camera direction)
@@ -180,14 +185,59 @@ export class Tank {
     gfx3JoltManager.bodyInterface.ActivateBody(this.physicsBody.body.GetID());
 
     const pos = this.physicsBody.body.GetPosition();
-    const rayStart = [pos.GetX(), pos.GetY() + 0.5, pos.GetZ()];
-    const rayEnd = [pos.GetX(), pos.GetY() - 3.5, pos.GetZ()];
+    const yawQ = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
+
+    const halfW = 1.6;
+    const halfD = 1.7;
+    const offsets = [
+        yawQ.rotateVector([halfW, 0, halfD]),
+        yawQ.rotateVector([-halfW, 0, halfD]),
+        yawQ.rotateVector([halfW, 0, -halfD]),
+        yawQ.rotateVector([-halfW, 0, -halfD])
+    ];
+
+    let avgNormal = [0, 0, 0];
+    let hitCount = 0;
+    let minDistFromCenter = 999;
+    const rayLen = 4.0;
+    const rayUpOffset = 0.5;
     
-    const rayHit = gfx3JoltManager.createRay(rayStart[0], rayStart[1], rayStart[2], rayEnd[0], rayEnd[1], rayEnd[2]);
+    for (const offset of offsets) {
+        const sx = pos.GetX() + offset[0];
+        const sy = pos.GetY() + rayUpOffset;
+        const sz = pos.GetZ() + offset[2];
+        const rayHit = gfx3JoltManager.createRay(sx, sy, sz, sx, sy - rayLen, sz);
+        
+        if (rayHit.body && rayHit.normal) {
+            avgNormal[0] += rayHit.normal.GetX();
+            avgNormal[1] += rayHit.normal.GetY();
+            avgNormal[2] += rayHit.normal.GetZ();
+            hitCount++;
+            
+            const distFromCenter = rayHit.fraction * rayLen - rayUpOffset;
+            if (distFromCenter < minDistFromCenter) minDistFromCenter = distFromCenter;
+        }
+    }
+    
     let groundNormal: vec3 = [0, 1, 0];
-    
-    if (rayHit.body && rayHit.normal) {
-        groundNormal = [rayHit.normal.GetX(), rayHit.normal.GetY(), rayHit.normal.GetZ()];
+    let isGrounded = false;
+
+    const centerHit = gfx3JoltManager.createRay(pos.GetX(), pos.GetY() + rayUpOffset, pos.GetZ(), pos.GetX(), pos.GetY() - rayLen, pos.GetZ());
+    if (centerHit.body && centerHit.normal) {
+        avgNormal[0] += centerHit.normal.GetX();
+        avgNormal[1] += centerHit.normal.GetY();
+        avgNormal[2] += centerHit.normal.GetZ();
+        hitCount++;
+        const centerDist = centerHit.fraction * rayLen - rayUpOffset;
+        if (centerDist < minDistFromCenter) minDistFromCenter = centerDist;
+    }
+
+    if (hitCount > 0) {
+        const len = Math.sqrt(avgNormal[0]*avgNormal[0] + avgNormal[1]*avgNormal[1] + avgNormal[2]*avgNormal[2]);
+        if (len > 0.001) {
+            groundNormal = [avgNormal[0]/len, avgNormal[1]/len, avgNormal[2]/len];
+            if (minDistFromCenter < 1.0) isGrounded = true;
+        }
     }
 
     // Smoothly align the tank's UP to the ground normal
@@ -198,21 +248,26 @@ export class Tank {
     this.currentNormal = UT.VEC3_NORMALIZE(this.currentNormal);
 
     // Calculate the orientation from Yaw + Ground Normal
-    const yawQ = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
     const upAlignmentQ = Quaternion.createFromBetweenVectors([0, 1, 0], this.currentNormal);
     const targetQuat = upAlignmentQ.mul(yawQ.w, yawQ.x, yawQ.y, yawQ.z);
     
     const joltQuatSet = new Gfx3Jolt.Quat(targetQuat.x, targetQuat.y, targetQuat.z, targetQuat.w);
     gfx3JoltManager.bodyInterface.SetRotation(this.physicsBody.body.GetID(), joltQuatSet, Gfx3Jolt.EActivation_Activate);
 
-    // Precise Velocity - Use full forward vector projection for accurate slope climbing
+    // Precise Velocity
     const forward = targetQuat.rotateVector([0, 0, -1]);
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
     
-    // We dampen the Y velocity slightly if not on ground, but otherwise let physics handle it
-    const newVelX = forward[0] * this.speed;
-    const newVelY = forward[1] * this.speed + (currentJoltVel.GetY() * 0.1); // Blend in a bit of Jolt gravity
-    const newVelZ = forward[2] * this.speed;
+    let newVelX = forward[0] * this.speed;
+    let newVelY = currentJoltVel.GetY();
+    let newVelZ = forward[2] * this.speed;
+
+    if (isGrounded) {
+       newVelY = forward[1] * this.speed;
+       if (this.speed !== 0 || Math.abs(groundNormal[1]) < 0.99) {
+           newVelY -= 2.0;
+       }
+    }
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 

@@ -496,13 +496,14 @@ export class GameScreen extends Screen {
       }
     });
 
-    if (type === ProjectileType.SHELL) {
-        // Real ballistic shells should have gravity! 
-        gfx3JoltManager.bodyInterface.SetGravityFactor(pBody.body.GetID(), 1.0); 
+    if (type === ProjectileType.SHELL || type === ProjectileType.GRENADE) {
+        // projecties should have gravity!
+        const gFactor = type === ProjectileType.GRENADE ? 2.2 : 1.0; 
+        gfx3JoltManager.bodyInterface.SetGravityFactor(pBody.body.GetID(), gFactor); 
     }
 
-    let forwardSpeed = type === ProjectileType.GRENADE ? 60 : 180; // Faster, consistent speed
-    let upwardVel = type === ProjectileType.GRENADE ? 20 : 0.5; // Flatter shell trajectory
+    let forwardSpeed = type === ProjectileType.GRENADE ? 45 : 180; // Reduced grenade speed
+    let upwardVel = type === ProjectileType.GRENADE ? 12 : 0.5; // Reduced grenade lob height
     
     forwardSpeed *= speedMod;
 

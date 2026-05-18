@@ -14,6 +14,7 @@ A log of all tasks, ideas, and progress for this project.
 
 ## Done
 
+-   **[2026-05-18 11:40]**: Fixed Grenade trajectory issue. Reduced forward speed from 60 to 45 and upward velocity from 20 to 12. Increased gravity factor to 2.2 to create a heavier, more controlled lob that prevents the grenade from overshooting targets.
 -   **[2026-05-18 11:29]**: Fixed dual inversion issues: Corrected Tank steering (D now correctly turns Right again after an accidental swap) and fixed muzzle pitch inversion (barrel now correctly aligns with camera pitch instead of looking down when the player looks up).
 -   **[2026-05-18 11:23]**: Fixed steering inversion (A now turns Left, D turns Right) and resolved "Right/Left" movement glitches by ensuring velocity vectors are perfectly aligned with the hull's 3D orientation. Smoothed Enemy movement by reducing obstacle avoidance jitter and fine-tuning rotation interpolation.
 -   **[2026-05-18 11:15]**: Overhauled Enemy design. Implemented type-specific high-fidelity meshes (Sleek Scouts, Heavy Juggernauts, Spike-turreted Elites). Adopted a "Hunter" aesthetic with dark achromatic bases and neon emissive accents (Orange, Purple, Red, Green). Added glowing sensor "eyes" to enhance threat visibility and personality.

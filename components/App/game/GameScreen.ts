@@ -82,11 +82,11 @@ export class GameScreen extends Screen {
   
   cameraYaw = 0; 
   cameraPitch = 0.45;
-  cameraDistance = 18;
-  cameraOffset: vec3 = [0, 6, 12]; 
+  cameraDistance = 10;
+  cameraOffset: vec3 = [0, 4, 8]; 
   cameraLookTarget: vec3 = [0, 0, 0];
   cameraPos: vec3 = [0, 0, 0];
-
+  
   isReady: boolean = false;
   rightClickFire: boolean = false;
   mouseX: number = 0;
@@ -144,7 +144,7 @@ export class GameScreen extends Screen {
 
   cameraAlpha: number = 0.1;
   isSniperMode: boolean = false;
-  targetCameraDistance: number = 28.0;
+  targetCameraDistance: number = 10.0;
 
   handleGlobalWheel = (e: WheelEvent) => {
     if (inputManager.isPointerLockCaptured()) {
@@ -325,8 +325,8 @@ export class GameScreen extends Screen {
     
     // 1. Calculate the ideal eye position
     // Base distance behind, but offset to the side for "Shoulder" feel
-    const sideOffset = this.isSniperMode ? 0.8 : 2.5;
-    const heightOffset = 3.5;
+    const sideOffset = this.isSniperMode ? 0.8 : 1.5;
+    const heightOffset = 2.2;
     
     // Local camera vectors
     const viewBack = rotQ.rotateVector([0, 0, this.cameraDistance]);
@@ -341,7 +341,7 @@ export class GameScreen extends Screen {
     // 2. Terrain clipping prevention (Floor floor)
     // Scale height floor based on pitch to avoid cutting through slopes
     const pitchFactor = Math.max(0, this.cameraPitch);
-    const minHeight = playerPos[1] + 1.5 + (pitchFactor * 2.0);
+    const minHeight = playerPos[1] + 1.2 + (pitchFactor * 1.5);
     if (idealPos[1] < minHeight) {
         idealPos[1] = minHeight;
     }

@@ -83,8 +83,8 @@ export class Tank {
     this.hatch = createBoxMesh(0.6, 0.15, 0.6, [0.15, 0.15, 0.15]);
     this.antenna = createBoxMesh(0.05, 1.5, 0.05, [0.1, 0.1, 0.1]);
 
-    this.physicsBody = gfx3JoltManager.addBox({
-      width: 3.45, height: 1.0, depth: 3.6, // Slightly shorter physics box to avoid ground issues
+    this.physicsBody = gfx3JoltManager.addSphere({
+      radius: 1.5,
       x: 0, y: 3.0, z: 0, // Spawn higher
       motionType: Gfx3Jolt.EMotionType_Dynamic,
       layer: JOLT_LAYER_MOVING,
@@ -247,7 +247,7 @@ export class Tank {
 
     if (hitCount > 0) {
         groundNormal = crossNormal;
-        if (minDistFromCenter < 1.0) isGrounded = true;
+        if (minDistFromCenter < 1.8) isGrounded = true;
     }
 
     // Smoothly align the tank's UP to the ground normal
@@ -313,7 +313,7 @@ export class Tank {
 
     const recoiledOrigin: vec3 = [
         origin[0] + forward[0] * bodyRecoilOffset,
-        origin[1],
+        origin[1] - 1.0, // Compensate for the sphere radius (1.5) vs old box height (0.5)
         origin[2] + forward[2] * bodyRecoilOffset
     ];
 

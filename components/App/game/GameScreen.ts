@@ -278,9 +278,8 @@ export class GameScreen extends Screen {
     const dy = targetLook[1] - turretPos[1];
     const dz = targetLook[2] - turretPos[2];
 
-    this.intent.aimYaw = Math.atan2(-dx, -dz);
-    const dist2D = Math.sqrt(dx*dx + dz*dz);
-    this.intent.aimPitch = Math.atan2(dy, dist2D);
+    this.intent.aimYaw = this.cameraYaw;
+    this.intent.aimPitch = this.cameraPitch;
   }
 
   update(ts: number) {

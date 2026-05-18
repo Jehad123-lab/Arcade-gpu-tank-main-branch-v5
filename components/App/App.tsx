@@ -8,14 +8,7 @@ import { screenManager } from '@lib/screen/screen_manager';
 import { gfx3Manager } from '@lib/gfx3/gfx3_manager';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    Crosshair, 
-    Fire, 
-    ArrowsOut, 
-    Monitor, 
-    DeviceMobile, 
-    Gear,
-    Info,
-    BoundingBox
+    Crosshair
 } from 'phosphor-react';
 import { GameScreen } from './game/GameScreen';
 
@@ -92,34 +85,6 @@ const StatBlock = ({ label, value, icon: Icon }: { label: string, value: string 
             fontWeight: 600 
         }}>{value}</span>
     </div>
-);
-
-const ActionButton = ({ icon: Icon, onClick, color = Tokens.colors.surface, onDown, onUp, size = 64 }: any) => (
-    <motion.button
-        whileTap={{ scale: 0.9, backgroundColor: Tokens.colors.accent }}
-        onPointerDown={onDown}
-        onPointerUp={onUp}
-        onPointerLeave={onUp}
-        style={{
-            width: size,
-            height: size,
-            borderRadius: Tokens.radius.full,
-            backgroundColor: color,
-            border: `1px solid ${Tokens.colors.border}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: Tokens.colors.content,
-            backdropFilter: 'blur(10px)',
-            cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            pointerEvents: 'auto',
-            position: 'relative',
-        }}
-    >
-        <Icon size={size * 0.5} weight="bold" />
-        <div style={{ position: 'absolute', inset: '-8px', borderRadius: Tokens.radius.full }} />
-    </motion.button>
 );
 
 const Joystick = ({ onChange }: { onChange: (dir: { x: number, y: number }) => void }) => {
@@ -450,29 +415,6 @@ const App = () => {
                             gameScreenRef.current.virtualMoveDir = { x: dir.x, y: -dir.y };
                          }
                     }} />}
-                </div>
-
-                <div style={{ display: 'flex', gap: Tokens.spacing.md, pointerEvents: 'auto' }}>
-                    <ActionButton 
-                        icon={BoundingBox} 
-                        size={56} 
-                        color={isZoomed ? Tokens.colors.accent : Tokens.colors.surface}
-                        onClick={() => {
-                            if (gameScreenRef.current) gameScreenRef.current.isSniperMode = !gameScreenRef.current.isSniperMode;
-                        }} 
-                    />
-                    <ActionButton 
-                        icon={Fire} 
-                        size={84}
-                        onDown={(e: any) => handleFire('normal', true, e)}
-                        onUp={(e: any) => handleFire('normal', false, e)}
-                    />
-                    <ActionButton 
-                        icon={ArrowsOut} 
-                        size={64}
-                        onDown={(e: any) => handleFire('grenade', true, e)}
-                        onUp={(e: any) => handleFire('grenade', false, e)}
-                    />
                 </div>
             </div>
 

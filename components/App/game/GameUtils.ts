@@ -48,6 +48,63 @@ export function createBoxGeo(width: number, height: number, depth: number, color
   return Gfx3Mesh.buildVertices(coords.length / 3, coords, [], colors, normals);
 }
 
+export function createCylinderGeo(radius: number, height: number, segments: number, color: [number, number, number]) {
+    const coords = [];
+    const colors = [];
+    const normals = [];
+    const h = height / 2;
+
+    for (let i = 0; i < segments; i++) {
+        const theta1 = (i / segments) * Math.PI * 2;
+        const theta2 = ((i + 1) / segments) * Math.PI * 2;
+
+        const x1 = Math.cos(theta1) * radius;
+        const z1 = Math.sin(theta1) * radius;
+        const x2 = Math.cos(theta2) * radius;
+        const z2 = Math.sin(theta2) * radius;
+
+        // Side
+        coords.push(x1, -h, z1, x2, -h, z2, x2, h, z2);
+        coords.push(x1, -h, z1, x2, h, z2, x1, h, z1);
+
+        // Top cap
+        coords.push(0, h, 0, x2, h, z2, x1, h, z1);
+        // Bottom cap
+        coords.push(0, -h, 0, x1, -h, z1, x2, -h, z2);
+    }
+
+    for (let i = 0; i < coords.length; i += 9) {
+        const v0: vec3 = [coords[i], coords[i+1], coords[i+2]];
+        const v1: vec3 = [coords[i+3], coords[i+4], coords[i+5]];
+        const v2: vec3 = [coords[i+6], coords[i+7], coords[i+8]];
+        const e1 = UT.VEC3_SUBSTRACT(v1, v0);
+        const e2 = UT.VEC3_SUBSTRACT(v2, v0);
+        const normal = UT.VEC3_NORMALIZE(UT.VEC3_CROSS(e1, e2));
+        for (let j = 0; j < 3; j++) {
+            colors.push(color[0], color[1], color[2]);
+            normals.push(normal[0], normal[1], normal[2]);
+        }
+    }
+
+    return Gfx3Mesh.buildVertices(coords.length / 3, coords, [], colors, normals);
+}
+
+export function createBulletMesh(): Gfx3Mesh {
+    const mainBody = createCylinderGeo(0.12, 1.2, 8, [0.7, 0.7, 0.7]); // Metallic grey
+    
+    const tip = createCylinderGeo(0.12, 0.4, 8, [0.8, 0.5, 0.2]); // Copper tip
+    
+    const tracer = createBoxGeo(0.1, 0.1, 0.1, [1.0, 0.8, 0.2]); // Bright glowing tracer spot at the back
+    
+    const matRot = UT.MAT4_ROTATE_X(Math.PI / 2);
+    
+    return combineGeos([
+        { geo: mainBody, matrix: UT.MAT4_MULTIPLY(UT.MAT4_TRANSLATE(0,0,0), matRot) },
+        { geo: tip, matrix: UT.MAT4_MULTIPLY(UT.MAT4_TRANSLATE(0, 0, -0.7), matRot) },
+        { geo: tracer, matrix: UT.MAT4_TRANSLATE(0, 0, 0.6) } // Back of the shell
+    ]);
+}
+
 export function combineGeos(geos: { geo: any, matrix: mat4 }[]): Gfx3Mesh {
     const totalVertices = geos.reduce((sum, g) => sum + g.geo.vertices.length, 0);
     const combinedVertices = new Float32Array(totalVertices);

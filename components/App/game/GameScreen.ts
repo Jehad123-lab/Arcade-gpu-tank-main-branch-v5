@@ -29,7 +29,7 @@ import { Tank } from './Tank';
 import { Environment } from './Environment';
 import { Enemy } from './Enemy';
 import { Explosion } from './Explosion';
-import { createBoxMesh } from './GameUtils';
+import { createBoxMesh, createBulletMesh } from './GameUtils';
 import { ObjectPool } from '@lib/core/object_pool';
 
 // --- PROJECTILE SYSTEM ---
@@ -109,9 +109,8 @@ export class GameScreen extends Screen {
     this.projectiles = [];
     
     // Create base meshes for projectiles
-    // Shell: Longer, slimmer, yellow/bright
-    this.shellMesh = createBoxMesh(0.2, 0.2, 1.8, [1.0, 1.0, 0.3]); 
-    // Grenade: Larger, dark grey with orange stripe (simulated by color contrast)
+    this.shellMesh = createBulletMesh(); 
+    // Grenade: Larger, dark grey sphere-like box
     this.grenadeMesh = createBoxMesh(0.7, 0.7, 0.7, [0.3, 0.3, 0.3]); 
 
     // Spawn exactly 3 enemies as requested

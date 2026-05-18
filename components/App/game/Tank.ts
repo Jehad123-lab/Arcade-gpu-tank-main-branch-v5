@@ -153,7 +153,7 @@ export class Tank {
     // W/S corresponds to moveDir.y (Throttle)
     // A/D corresponds to moveDir.x (Steering)
     const throttle = moveDir.y; 
-    const steer = moveDir.x; // Fixed: Remove negative to correct inversion (A=Left, D=Right)
+    const steer = -moveDir.x; // Fixed: Needs minus for D=Right turn (Negative Yaw)
 
     if (Math.abs(throttle) > 0.05 || Math.abs(steer) > 0.05) {
         // Rotation (Independent of camera direction)
@@ -286,7 +286,7 @@ export class Tank {
     const targetPitch = Math.max(maxDepress, Math.min(maxElevate, aimPitch));
     this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 4.0 * (ts / 1000));
     
-    const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
+    const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
     // Reduced recoil slide to prevent clipping out the back of the turret
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);

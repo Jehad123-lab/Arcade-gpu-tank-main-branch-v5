@@ -146,63 +146,32 @@ export class Tank {
     this.grenadeRecoil -= (ts / 1000) * 1.5;
     if (this.grenadeRecoil < 0) this.grenadeRecoil = 0;
     
-    // 1. TANK MOVEMENT LOGIC (Camera-Relative Smart Controls)
-    const isMoving = Math.abs(moveDir.x) > 0.05 || Math.abs(moveDir.y) > 0.05;
-    const TANK_MAX_SPEED = 16.0; // Responsive arcade speed
+    // 1. TANK MOVEMENT LOGIC (Classic Tank Controls)
+    const TANK_MAX_SPEED = 16.0;
+    const MAX_ROT_VEL = 4.5;
+    
+    const throttle = moveDir.y; 
+    const steer = moveDir.x; 
 
-    if (isMoving) {
-        // Find desired world angle based on camera's aimYaw and input direction
-        let targetWorldYaw = aimYaw + Math.atan2(-moveDir.x, moveDir.y);
-        
-        let yawDiff = ((targetWorldYaw - this.rotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-        if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    if (Math.abs(throttle) > 0.05 || Math.abs(steer) > 0.05) {
+        // Rotation (Independent of camera direction)
+        const turnAuthority = 1.0 - (Math.abs(this.speed) / TANK_MAX_SPEED * 0.5);
+        const targetRotVel = steer * MAX_ROT_VEL * turnAuthority;
+        this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-12.0 * (ts / 1000)));
 
-        // Rotate chassis towards target direction
-        const speedRatio = Math.abs(this.speed) / TANK_MAX_SPEED;
-        
-        // Rotational Inertia Logic
-        // Extremely fast pivot when slow to feel powerful, wider arcs at high speed
-        const turnAuthority = 1.0 - (speedRatio * 0.7); 
-        const turnAccel = 60.0 * turnAuthority; 
-        const turnDamping = 20.0;
-
-        // Calculate torque needed to reach target direction
-        let targetRotVel = yawDiff * turnAccel;
-        const maxRotVel = 6.5 * turnAuthority;
-        targetRotVel = Math.max(-maxRotVel, Math.min(maxRotVel, targetRotVel));
-
-        this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-turnDamping * (ts / 1000)));
-        this.rotation += this.rotVel * (ts / 1000);
-        this.rotation = UT.CLAMP_ANGLE(this.rotation);
-
-        // Calculate alignment to apply gradual speed (Heavy track traction feel)
-        // alignment is 1.0 when perfectly pointing at target, 0.0 at 90 deg.
-        const alignment = Math.max(0, Math.cos(yawDiff));
-        // Hard-Core alignment logic: if we are 30 deg off, we move at ~10% speed.
-        // This forces a heavy pivot before surging forward.
-        const efficiency = Math.pow(alignment, 6.0); 
-        
-        const maxCurrentSpeed = TANK_MAX_SPEED * efficiency;
-        let targetSpeed = maxCurrentSpeed; // Nose always follows move direction
-
-        // Hard lock: If angle is > 30 degrees, prioritize pivoting by cutting speed to absolute minimum
-        if (Math.abs(yawDiff) > Math.PI / 6) {
-             targetSpeed *= 0.01; 
-        }
-        
+        // Throttle (Always relative to current chassis orientation)
+        const targetSpeed = throttle * TANK_MAX_SPEED;
         const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
-        
-        // Power curve for acceleration (Torque feel)
         const accelAlpha = isBraking ? 12.0 : 5.0; 
         this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-accelAlpha * (ts / 1000)));
-        
     } else {
         // Braking and stopping rotation
         this.speed = UT.LERP(this.speed, 0, 1.0 - Math.exp(-6.0 * (ts / 1000)));
-        this.rotVel = UT.LERP(this.rotVel, 0, 1.0 - Math.exp(-10.0 * (ts / 1000)));
-        this.rotation += this.rotVel * (ts / 1000);
-        this.rotation = UT.CLAMP_ANGLE(this.rotation);
+        this.rotVel = UT.LERP(this.rotVel, 0, 1.0 - Math.exp(-15.0 * (ts / 1000)));
     }
+
+    this.rotation += this.rotVel * (ts / 1000);
+    this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
     // 2. JOLT PHYSICS SYNC
     gfx3JoltManager.bodyInterface.ActivateBody(this.physicsBody.body.GetID());

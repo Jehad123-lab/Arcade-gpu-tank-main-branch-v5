@@ -442,11 +442,12 @@ export class GameScreen extends Screen {
     });
 
     if (type === ProjectileType.SHELL) {
-        gfx3JoltManager.bodyInterface.SetGravityFactor(pBody.body.GetID(), 0); 
+        // Real ballistic shells should have gravity! 
+        gfx3JoltManager.bodyInterface.SetGravityFactor(pBody.body.GetID(), 1.0); 
     }
 
-    let forwardSpeed = type === ProjectileType.GRENADE ? 45 : 180; 
-    let upwardVel = type === ProjectileType.GRENADE ? 18 : 0;
+    let forwardSpeed = type === ProjectileType.GRENADE ? 45 : 135 + Math.random() * 15; // Randomized muzzle velocity
+    let upwardVel = type === ProjectileType.GRENADE ? 18 : 2.5; 
     
     forwardSpeed *= speedMod;
 
@@ -493,12 +494,13 @@ export class GameScreen extends Screen {
         continue;
       }
       
-      if (p.life < 4.9 && Math.random() < 0.4) {
+      if (p.life < 4.98 && Math.random() < 0.7) { // Increased trail frequency
           const exp = this.explosionPool.acquire() as Explosion;
           if (exp) {
-              const trailColor: [number, number, number] = p.type === ProjectileType.GRENADE ? [0.6, 0.6, 0.6] : [1.0, 0.8, 0.5];
-              const trailScale = p.type === ProjectileType.GRENADE ? 1.5 : 0.6;
-              exp.reset(pPos3[0], pPos3[1], pPos3[2], trailColor, undefined, trailScale, 'trail');
+              const trailColor: [number, number, number] = p.type === ProjectileType.GRENADE ? [0.6, 0.6, 0.6] : [0.9, 0.9, 0.8];
+              const trailScale = p.type === ProjectileType.GRENADE ? 1.8 : 0.8;
+              const pVel = [curV.GetX(), curV.GetY(), curV.GetZ()] as vec3;
+              exp.reset(pPos3[0], pPos3[1], pPos3[2], trailColor, pVel, trailScale, 'trail');
               this.explosions.push(exp);
           }
       }

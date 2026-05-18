@@ -109,21 +109,32 @@ export class Explosion implements Poolable<Explosion> {
             }
             
         } else if (type === 'trail') {
-            // Trail: small fire transitioning to smoke
-            const numParticles = 1;
+            // Trail: multiple particles for a denser wake
+            const numParticles = Math.max(1, Math.floor(2 * scaleMultiplier));
             for (let i = 0; i < numParticles; i++) {
-                const pos: vec3 = [x + (Math.random() - 0.5) * 0.1, y + (Math.random() - 0.5) * 0.1, z + (Math.random() - 0.5) * 0.1];
-                let dirX = (Math.random() - 0.5) * 0.5;
-                let dirY = (Math.random() - 0.5) * 0.5;
-                let dirZ = (Math.random() - 0.5) * 0.5;
-                const vel = UT.VEC3_SCALE([dirX, dirY, dirZ], 0.5);
-                const life = 0.4 + Math.random() * 0.4;
-                // colorIdx 0 is fire/bright, 3 is smoke
+                const pos: vec3 = [
+                    x + (Math.random() - 0.5) * 0.2, 
+                    y + (Math.random() - 0.5) * 0.2, 
+                    z + (Math.random() - 0.5) * 0.2
+                ];
+                
+                // Directional drift + tiny randomization
+                let vel: vec3 = [0, 0, 0];
+                if (direction) {
+                    // inherit some of the projectile velocity but slowed down
+                    vel = UT.VEC3_SCALE(direction, 0.15); 
+                }
+                
+                vel[0] += (Math.random() - 0.5) * 0.8;
+                vel[1] += (Math.random() - 0.5) * 0.8;
+                vel[2] += (Math.random() - 0.5) * 0.8;
+                
+                const life = 0.6 + Math.random() * 0.6;
                 this.particles.push({ 
                     pos, vel, life, maxLife: life, 
-                    colorIdx: Math.random() < 0.3 ? 0 : 3, 
-                    scaleMultiplier: scaleMultiplier * (0.8 + Math.random() * 0.4), 
-                    type: Math.random() < 0.3 ? 'fire' : 'smoke' 
+                    colorIdx: Math.random() < 0.2 ? 0 : 3, 
+                    scaleMultiplier: scaleMultiplier * (0.6 + Math.random() * 0.4), 
+                    type: Math.random() < 0.2 ? 'fire' : 'smoke' 
                 });
             }
         } else {

@@ -157,31 +157,18 @@ export class Tank {
         let yawDiff = ((targetWorldYaw - this.rotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
         if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
 
-        let isReversing = false;
-        
-        // If the target direction is more than 110 degrees away from current facing, 
-        // go backwards instead of doing a full 180 U-turn! (Added hysteresis)
-        if (Math.abs(yawDiff) > Math.PI * 0.6) {
-            targetWorldYaw = UT.CLAMP_ANGLE(targetWorldYaw + Math.PI);
-            isReversing = true;
-            // recompute yawDiff
-            yawDiff = ((targetWorldYaw - this.rotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-            if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
-        }
-
         // Rotate chassis towards target direction
         const speedRatio = Math.abs(this.speed) / TANK_MAX_SPEED;
         
         // Rotational Inertia Logic
-        // Very fast pivot when slow to feel "snappy" and heavy, wider arcs at high speed
-        const turnAuthority = 1.0 - (speedRatio * 0.6); 
-        const turnAccel = 45.0 * turnAuthority; 
-        const turnDamping = 16.0;
+        // Extremely fast pivot when slow to feel powerful, wider arcs at high speed
+        const turnAuthority = 1.0 - (speedRatio * 0.7); 
+        const turnAccel = 60.0 * turnAuthority; 
+        const turnDamping = 20.0;
 
         // Calculate torque needed to reach target direction
         let targetRotVel = yawDiff * turnAccel;
-        // Increase max rotation speed for better responsiveness
-        const maxRotVel = 5.5 * turnAuthority;
+        const maxRotVel = 6.5 * turnAuthority;
         targetRotVel = Math.max(-maxRotVel, Math.min(maxRotVel, targetRotVel));
 
         this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-turnDamping * (ts / 1000)));
@@ -191,22 +178,22 @@ export class Tank {
         // Calculate alignment to apply gradual speed (Heavy track traction feel)
         // alignment is 1.0 when perfectly pointing at target, 0.0 at 90 deg.
         const alignment = Math.max(0, Math.cos(yawDiff));
-        // Quadratic scaling: if we are 45 deg off, we move at ~50% speed. 90 deg off = 0% speed.
-        // This forces the tank to "face where it goes" before it can accelerate fully.
-        const efficiency = Math.pow(alignment, 2.0); 
+        // Hard-Core alignment logic: if we are 30 deg off, we move at ~10% speed.
+        // This forces a heavy pivot before surging forward.
+        const efficiency = Math.pow(alignment, 6.0); 
         
         const maxCurrentSpeed = TANK_MAX_SPEED * efficiency;
-        let targetSpeed = isReversing ? -maxCurrentSpeed : maxCurrentSpeed;
+        let targetSpeed = maxCurrentSpeed; // Nose always follows move direction
 
-        // Hard lock: If angle is > 45 degrees, prioritize pivoting by cutting speed to near zero
-        if (Math.abs(yawDiff) > Math.PI / 4) {
-             targetSpeed *= 0.05; 
+        // Hard lock: If angle is > 30 degrees, prioritize pivoting by cutting speed to absolute minimum
+        if (Math.abs(yawDiff) > Math.PI / 6) {
+             targetSpeed *= 0.01; 
         }
         
         const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
         
         // Power curve for acceleration (Torque feel)
-        const accelAlpha = isBraking ? 10.0 : 5.0; // Snappier braking
+        const accelAlpha = isBraking ? 12.0 : 5.0; 
         this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-accelAlpha * (ts / 1000)));
         
     } else {

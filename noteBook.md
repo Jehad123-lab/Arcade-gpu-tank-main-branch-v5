@@ -14,6 +14,7 @@ A log of all tasks, ideas, and progress for this project.
 
 ## Done
 
+-   **[2026-05-18 10:55]**: Refactored tank movement into a "Pivot-First" system. Removed automatic reverse-driving logic to ensure the hull always faces the direction of travel (leading with the front), increased rotational authority, and added a steep speed penalty for misalignment to force the tank to position its body before accelerating.
 -   **[2026-05-18 10:44]**: Fixed a runtime error `TypeError: this.camera.getFieldOfView is not a function`. The correct methods in the ArcadeGPU engine are `getPerspectiveFovy` and `setPerspectiveFovy`. Corrected these in `GameScreen.ts`.
 -   **[2026-05-18 10:40]**: Substantially improved tank movement controls. Added rotational inertia (acceleration/damping) for a weightier feel, implemented speed-scaled turn authority, and added dynamic camera feedback (FOV and Distance scaling) that responds to movement speed.
 -   **[2026-05-18 10:38]**: Fixed the issue where pressing W/S caused unrealistic chassis tilting, fulfilling the user's request for a stable firing platform.

@@ -205,9 +205,7 @@ export class GameScreen extends Screen {
     this.cameraDistance = 15;
     this.camera.getView().setBgColor(0.53, 0.81, 0.92, 1.0); // Sky blue
     
-    if (!this.tank.physicsBody || !this.tank.physicsBody.body) return;
     const tankP = this.tank.physicsBody.body.GetPosition();
-    if (!tankP) return;
     this.cameraLookTarget = [tankP.GetX(), tankP.GetY() + 1.5, tankP.GetZ()];
     
     // Spawn exactly 3 enemies
@@ -262,10 +260,7 @@ export class GameScreen extends Screen {
     this.intent.isFiringNormal = this.virtualFireNormal || inputManager.isActiveAction('FIRE') || (inputManager.isMouseDown() && !this.rightClickFire);
     this.intent.isFiringGrenade = this.virtualFireGrenade || this.rightClickFire || inputManager.isActiveAction('FIRE_ALT');
 
-    if (!this.tank.physicsBody || !this.tank.physicsBody.body) return;
     const tankP = this.tank.physicsBody.body.GetPosition();
-    if (!tankP) return;
-
     const playerPos: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
     const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
     const sideOffset = this.isSniperMode ? 0.8 : 1.5;
@@ -316,7 +311,6 @@ export class GameScreen extends Screen {
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.18);
     }
 
-    if (!this.tank.physicsBody || !this.tank.physicsBody.body) return;
     const tankP = this.tank.physicsBody.body.GetPosition();
     const playerPos: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
     
@@ -362,29 +356,21 @@ export class GameScreen extends Screen {
     }
 
 
-    const finalTargetDist = this.isSniperMode ? 5.0 : this.targetCameraDistance;
+    const finalTargetDist = this.isSniperMode ? 6.0 : this.targetCameraDistance;
     this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
 
-    // DYNAMIC FOV
-    const speedRatio = Math.abs(this.tank.speed) / 16.0;
-    const targetFOV = this.isSniperMode ? 40 : (45 + speedRatio * 10);
-    this.camera.setPerspectiveFovy(UT.LERP(this.camera.getPerspectiveFovy(), UT.DEG_TO_RAD(targetFOV), 1.0 - Math.exp(-4.0 * (ts / 1000))));
-
     // OVER-THE-SHOULDER CAMERA LOGIC
+    // We use a dedicated shoulder offset and smoothed look-at system
     const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
     
-    // Smooth Camera Side Offset (Shoulder swap or centering)
-    const sideOffset = this.isSniperMode ? 0.6 : 1.5;
+    // 1. Calculate the ideal eye position
+    // Base distance behind, but offset to the side for "Shoulder" feel
+    const sideOffset = this.isSniperMode ? 0.8 : 1.5;
     const heightOffset = 2.2;
     
     // Local camera vectors
     const viewBack = rotQ.rotateVector([0, 0, this.cameraDistance]);
     const viewRight = rotQ.rotateVector([sideOffset, 0, 0]);
-    
-    // Add a bit of tilt based on rotation (Modern feel)
-    const tankTurnRatio = -this.intent.moveDir.x * Math.min(1.0, Math.abs(this.tank.speed) / 5.0);
-    const cameraRoll = tankTurnRatio * 0.05;
-    const finalRotQ = rotQ.mul(Math.cos(cameraRoll/2), 0, 0, Math.sin(cameraRoll/2)); // Roll Q
     
     const idealPos: vec3 = [
         playerPos[0] + viewBack[0] + viewRight[0],
@@ -392,14 +378,16 @@ export class GameScreen extends Screen {
         playerPos[2] + viewBack[2] + viewRight[2]
     ];
     
-    // Terrain clipping prevention
-    const minHeight = playerPos[1] + 1.2 + (Math.max(0, this.cameraPitch) * 1.5);
+    // 2. Terrain clipping prevention (Floor floor)
+    // Scale height floor based on pitch to avoid cutting through slopes
+    const pitchFactor = Math.max(0, this.cameraPitch);
+    const minHeight = playerPos[1] + 1.2 + (pitchFactor * 1.5);
     if (idealPos[1] < minHeight) {
         idealPos[1] = minHeight;
     }
     
-    // Position Smoothing
-    const camAlpha = 1.0 - Math.exp(-14.0 * (ts / 1000)); 
+    // 3. Position Smoothing (Chase LERP)
+    const camAlpha = 1.0 - Math.exp(-12.0 * (ts / 1000)); 
     this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
     
     const shakeX = (Math.random() - 0.5) * this.shakeIntensity;
@@ -408,63 +396,20 @@ export class GameScreen extends Screen {
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     
-    // Update the Look-At Target (Lead slightly in movement direction)
+    // 4. Update the Look-At Target
+    // Focus slightly to the side of the tank to maintain the shoulder composition
     const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0,-1]);
     const viewForward = rotQ.rotateVector([0, 0, -1]);
-    
-    // Modern "Target Look" system
     const targetLook: vec3 = [
         playerPos[0] + lookRight[0] + viewForward[0] * 100.0,
         playerPos[1] + 1.2 + viewForward[1] * 100.0,
         playerPos[2] + lookRight[2] + viewForward[2] * 100.0
     ];
     
-    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, targetLook, 1.0 - Math.exp(-22.0 * (ts / 1000)));
+    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, targetLook, 1.0 - Math.exp(-18.0 * (ts / 1000)));
     this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));
-  }
-
-  getGunAimWorldPos(): vec3 {
-    if (!this.tank) return [0, 0, 0];
-    const m = this.tank.barrel.getTransformMatrix();
-    // Forward vector is [0, 0, -1] rotated by matrix (ignoring translation)
-    const forward: vec3 = [
-        m[0] * 0 + m[4] * 0 + m[8] * -1,
-        m[1] * 0 + m[5] * 0 + m[9] * -1,
-        m[2] * 0 + m[6] * 0 + m[10] * -1
-    ];
-    const origin: vec3 = [m[12], m[13], m[14]];
-    
-    // Raycast to find what we are actually aiming at
-    const rayEnd = [
-      origin[0] + forward[0] * 500,
-      origin[1] + forward[1] * 500,
-      origin[2] + forward[2] * 500
-    ];
-    
-    const rayHit = gfx3JoltManager.createRay(origin[0], origin[1], origin[2], rayEnd[0], rayEnd[1], rayEnd[2]);
-    if (rayHit.body && rayHit.normal) {
-      const dist = 500 * rayHit.fraction;
-      return [
-        origin[0] + forward[0] * dist,
-        origin[1] + forward[1] * dist,
-        origin[2] + forward[2] * dist
-      ];
-    }
-    
-    return rayEnd;
-  }
-
-  worldToScreen(worldPos: vec3): { x: number, y: number } | null {
-    const screenPos = this.camera.view.getScreenPosition(worldPos[0], worldPos[1], worldPos[2]);
-    
-    if (screenPos[0] === -Infinity) return null;
-    
-    return {
-      x: screenPos[0],
-      y: screenPos[1]
-    };
   }
 
   handleTankMuzzleFlash(pos: vec3, forward: vec3, type: ProjectileType) {
@@ -498,11 +443,8 @@ export class GameScreen extends Screen {
     const ZERO: vec3 = [0, 0, 0];
 
     for (const p of this.projectiles) {
-       if (!p.body || !p.body.body) continue;
        const pPos = p.body.body.GetPosition();
        const pRot = p.body.body.GetRotation();
-       if (!pPos || !pRot) continue;
-
        const q = new Quaternion(pRot.GetW(), pRot.GetX(), pRot.GetY(), pRot.GetZ());
        
        const matProj = UT.MAT4_TRANSFORM(
@@ -582,29 +524,16 @@ export class GameScreen extends Screen {
   }
 
   updateProjectiles(ts: number) {
-    if (!this.tank.physicsBody || !this.tank.physicsBody.body) return;
     const tankP = this.tank.physicsBody.body.GetPosition();
-    if (!tankP) return;
     const playerPos3: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
 
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.life -= ts / 1000;
 
-      if (!p.body || !p.body.body) {
-        this.projectiles.splice(i, 1);
-        continue;
-      }
-
       const pPos = p.body.body.GetPosition();
-      const curV = p.body.body.GetLinearVelocity();
-      if (!pPos || !curV) {
-        gfx3JoltManager.remove(p.body.bodyId);
-        this.projectiles.splice(i, 1);
-        continue;
-      }
-
       const pPos3: vec3 = [pPos.GetX(), pPos.GetY(), pPos.GetZ()];
+      const curV = p.body.body.GetLinearVelocity();
 
       if (p.life <= 0) {
         if (p.type === ProjectileType.GRENADE) {
@@ -630,9 +559,8 @@ export class GameScreen extends Screen {
 
       if (p.ownerId === 'player') {
           for (const enemy of this.enemies) {
-              if (enemy.hp <= 0 || !enemy.physicsBody || !enemy.physicsBody.body) continue;
+              if (enemy.hp <= 0) continue;
               const ePos = enemy.physicsBody.body.GetPosition();
-              if (!ePos) continue;
               const dist = UT.VEC3_DISTANCE(pPos3, [ePos.GetX(), ePos.GetY() + 0.3 * enemy.stats.scale, ePos.GetZ()]); 
               
               const hitRange = 4.5 * enemy.stats.scale;
@@ -688,9 +616,7 @@ export class GameScreen extends Screen {
       
       if (isEnemy) {
           target.hp -= dmg;
-          if (!target.physicsBody || !target.physicsBody.body) return;
           const ePos = target.physicsBody.body.GetPosition();
-          if (!ePos) return;
           
           const exp = this.explosionPool.acquire() as Explosion;
           if (exp) {
@@ -737,9 +663,7 @@ export class GameScreen extends Screen {
   applyAOE(origin: vec3, radius: number, damage: number) {
       for (const enemy of this.enemies) {
           if (enemy.hp <= 0) continue;
-          if (!enemy.physicsBody || !enemy.physicsBody.body) continue;
           const ePos = enemy.physicsBody.body.GetPosition();
-          if (!ePos) continue;
           const dist = UT.VEC3_DISTANCE(origin, [ePos.GetX(), ePos.GetY(), ePos.GetZ()]);
           if (dist < radius) {
               enemy.hp -= damage;
@@ -754,9 +678,7 @@ export class GameScreen extends Screen {
           }
       }
 
-      if (!this.tank.physicsBody || !this.tank.physicsBody.body) return;
       const tankP = this.tank.physicsBody.body.GetPosition();
-      if (!tankP) return;
       const playerPos3: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
       const distToPlayer = UT.VEC3_DISTANCE(origin, playerPos3);
       if (distToPlayer < radius) {

@@ -174,10 +174,7 @@ export class Enemy {
     this.shootCooldown -= dt;
     this.stateTimer -= dt;
 
-    if (!this.physicsBody || !this.physicsBody.body) return { didShoot: false };
-    const posP = this.physicsBody.body.GetPosition();
-    if (!posP) return { didShoot: false };
-    const pos = JOLT_RVEC3_TO_VEC3(posP);
+    const pos = JOLT_RVEC3_TO_VEC3(this.physicsBody.body.GetPosition());
     if (pos[1] < -20.0) { this.hp = 0; return { didShoot: false }; }
 
     const dx = playerPos[0] - pos[0];
@@ -270,9 +267,7 @@ export class Enemy {
 
   private applyMovement(ts: number, targetAngle: number, throttle: number) {
     const dt = ts / 1000;
-    if (!this.physicsBody || !this.physicsBody.body) return;
     const qPhysics = this.physicsBody.body.GetRotation();
-    if (!qPhysics) return;
     const currentQuat = new Quaternion(qPhysics.GetW(), qPhysics.GetX(), qPhysics.GetY(), qPhysics.GetZ());
     const currentForward = currentQuat.rotateVector([0, 0, -1]);
     const currentYaw = Math.atan2(-currentForward[0], -currentForward[2]);
@@ -288,7 +283,6 @@ export class Enemy {
     
     const targetAngVelY = physYawDiff * 15.0; 
     const currentAngVel = this.physicsBody.body.GetAngularVelocity();
-    if (!currentAngVel) return;
     const newAngY = UT.LERP(currentAngVel.GetY(), targetAngVelY, 1.0 - Math.exp(-15.0 * dt));
 
     const currentUpVec = currentQuat.rotateVector([0, 1, 0]);
@@ -303,7 +297,6 @@ export class Enemy {
 
     const forward = currentQuat.rotateVector([0, 0, -1]);
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
-    if (!currentJoltVel) return;
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
         new Gfx3Jolt.Vec3(forward[0] * this.velocity, currentJoltVel.GetY(), forward[2] * this.velocity)
@@ -321,10 +314,7 @@ export class Enemy {
     const PI2 = Math.PI * 2;
     
     // Turret aiming directly at player
-    if (!this.physicsBody || !this.physicsBody.body) return { didShoot: false };
-    const posP = this.physicsBody.body.GetPosition();
-    if (!posP) return { didShoot: false };
-    const pos = JOLT_RVEC3_TO_VEC3(posP);
+    const pos = JOLT_RVEC3_TO_VEC3(this.physicsBody.body.GetPosition());
     const dx = playerPos[0] - pos[0];
     const dz = playerPos[2] - pos[2];
     const playerAngle = Math.atan2(-dx, -dz);
@@ -344,9 +334,7 @@ export class Enemy {
   }
 
   getMuzzleData(q: Quaternion): { muzzlePos: vec3, dir: vec3 } {
-    if (!this.physicsBody || !this.physicsBody.body) return { muzzlePos: [0,0,0], dir: [0,0,-1] };
     const pos = this.physicsBody.body.GetPosition();
-    if (!pos) return { muzzlePos: [0,0,0], dir: [0,0,-1] };
     const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
     const bodyMatrix = UT.MAT4_TRANSFORM(origin, [0, 0, 0], [1, 1, 1], q);
     
@@ -376,9 +364,7 @@ export class Enemy {
     const scale: vec3 = [s, s, s];
     const ZERO: vec3 = [0,0,0];
 
-    if (!this.physicsBody || !this.physicsBody.body) return;
     const pos = this.physicsBody.body.GetPosition();
-    if (!pos) return;
     const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
     
     const bodyRecoil = this.recoil > 0 ? this.recoil * 0.05 : 0;

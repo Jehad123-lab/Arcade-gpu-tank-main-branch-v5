@@ -41,11 +41,6 @@ export class Tank {
   hp: number = 100;
   recoil: number = 0;
 
-  // New smoothing properties
-  visualRotation: number = 0;
-  visualTurretYaw: number = 0;
-  visualBarrelPitch: number = 0;
-
   options = {
     accelerationSpeed: 30.0,
     maxSpeed: 18.0,
@@ -53,10 +48,8 @@ export class Tank {
     boostAtStart: 1.0,
     brakeFriction: 4.0,
     engineBrakeFriction: 1.5,
-    steerSpeed: 1.2,
-    maxTurn: 0.8,
-    turretTraverseSpeed: 1.8, // Radians per second
-    barrelPitchSpeed: 1.2,
+    steerSpeed: 1.5,
+    maxTurn: 0.6,
     quickFactor: 3.0,
     swiftnessMap: [
       { mapBegin: 1.0, mapEnd: 1.0, valueMin: 0, valueMax: 10 },
@@ -154,50 +147,67 @@ export class Tank {
     
     // 1. TANK MOVEMENT LOGIC (Camera-Relative Smart Controls)
     const isMoving = Math.abs(moveDir.x) > 0.05 || Math.abs(moveDir.y) > 0.05;
-    const TANK_MAX_SPEED = 16.0;
+    const TANK_MAX_SPEED = 16.0; // Responsive arcade speed
 
     if (isMoving) {
+        // Find desired world angle based on camera's aimYaw and input direction
         let targetWorldYaw = aimYaw + Math.atan2(-moveDir.x, moveDir.y);
-        let yawDiff = UT.NORMALIZE_ANGLE(targetWorldYaw - this.rotation);
+        
+        let yawDiff = ((targetWorldYaw - this.rotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+        if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
 
         let isReversing = false;
+        
+        // If the target direction is more than 110 degrees away from current facing, 
+        // go backwards instead of doing a full 180 U-turn! (Added hysteresis)
         if (Math.abs(yawDiff) > Math.PI * 0.6) {
             targetWorldYaw = UT.CLAMP_ANGLE(targetWorldYaw + Math.PI);
             isReversing = true;
-            yawDiff = UT.NORMALIZE_ANGLE(targetWorldYaw - this.rotation);
+            // recompute yawDiff
+            yawDiff = ((targetWorldYaw - this.rotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+            if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
         }
 
-        // Limit Chassis Rotation Speed for realism (Weight feel)
-        const chassisTurnSpeed = 1.8; // Rad/s
-        const maxTurn = chassisTurnSpeed * (ts / 1000);
-        this.rotation += UT.CLAMP(yawDiff, -maxTurn, maxTurn);
+        // Rotate chassis towards target direction
+        const speedRatio = Math.abs(this.speed) / TANK_MAX_SPEED;
+        const pivotBoost = 1.0 + (1.0 - Math.min(1.0, speedRatio)) * 1.5; 
+        const maxTurn = 2.0 * pivotBoost * (ts / 1000); 
+
+        if (Math.abs(yawDiff) > maxTurn) {
+            this.rotation += Math.sign(yawDiff) * maxTurn;
+        } else {
+            this.rotation = targetWorldYaw;
+        }
+        
         this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
+        // Calculate alignment to apply gradual speed (auto-slowdown during sharp turns)
         const alignment = Math.max(0, Math.cos(yawDiff));
+        
         const maxCurrentSpeed = TANK_MAX_SPEED * alignment;
         let targetSpeed = isReversing ? -maxCurrentSpeed : maxCurrentSpeed;
 
+        // If wildly turning, slow down significantly to allow pivot
         if (Math.abs(yawDiff) > Math.PI / 3) {
-             targetSpeed *= 0.3; 
+             targetSpeed *= 0.2; 
         }
         
         const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
-        const linearAccel = isBraking ? 7.0 : 4.0;
+        const linearAccel = isBraking ? 6.0 : 3.5;
         this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
         
     } else {
-        this.speed = UT.LERP(this.speed, 0, 1.0 - Math.exp(-6.0 * (ts / 1000)));
+        // Braking
+        this.speed = UT.LERP(this.speed, 0, 1.0 - Math.exp(-5.0 * (ts / 1000)));
     }
 
     // 2. JOLT PHYSICS SYNC
-    if (!this.physicsBody || !this.physicsBody.body) return { normal: didShootNormal, grenade: didShootGrenade, muzzlePos: [0, 0, 0], muzzleDir: [0, 0, -1] };
-    
     gfx3JoltManager.bodyInterface.ActivateBody(this.physicsBody.body.GetID());
+
     const pos = this.physicsBody.body.GetPosition();
-    if (!pos) return { normal: didShootNormal, grenade: didShootGrenade, muzzlePos: [0, 0, 0], muzzleDir: [0, 0, -1] };
+    const rayStart = [pos.GetX(), pos.GetY() + 0.5, pos.GetZ()];
+    const rayEnd = [pos.GetX(), pos.GetY() - 2.5, pos.GetZ()];
     
-    const rayStart = [pos.GetX(), pos.GetY() + 1.5, pos.GetZ()];
-    const rayEnd = [pos.GetX(), pos.GetY() - 3.0, pos.GetZ()];
     const rayHit = gfx3JoltManager.createRay(rayStart[0], rayStart[1], rayStart[2], rayEnd[0], rayEnd[1], rayEnd[2]);
     let groundNormal: vec3 = [0, 1, 0];
     
@@ -206,25 +216,32 @@ export class Tank {
     }
 
     // Smoothly align the tank's UP to the ground normal
-    this.currentNormal = UT.VEC3_LERP(this.currentNormal, groundNormal, 1.0 - Math.exp(-10.0 * (ts / 1000)));
+    this.currentNormal[0] = UT.LERP(this.currentNormal[0], groundNormal[0], 10.0 * (ts / 1000));
+    this.currentNormal[1] = UT.LERP(this.currentNormal[1], groundNormal[1], 10.0 * (ts / 1000));
+    this.currentNormal[2] = UT.LERP(this.currentNormal[2], groundNormal[2], 10.0 * (ts / 1000));
     this.currentNormal = UT.VEC3_NORMALIZE(this.currentNormal);
 
-    const invYawQ = Quaternion.createFromEuler(-this.rotation, 0, 0, 'YXZ');
-    const localNormal = invYawQ.rotateVector(this.currentNormal);
+    // Calculate the orientation from Yaw + Ground Normal
+    // 1. Create a quat for the arcade yaw
+    const yawQ = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
     
-    const targetPitch = Math.atan2(localNormal[2], localNormal[1]);
-    const targetRoll = Math.atan2(-localNormal[0], localNormal[1]);
-
-    const targetQuat = Quaternion.createFromEuler(this.rotation, targetPitch, targetRoll, 'YXZ');
+    // 2. Align local UP ([0, 1, 0]) to currentNormal
+    const upAlignmentQ = Quaternion.createFromBetweenVectors([0, 1, 0], this.currentNormal);
+    
+    // 3. Combine them: Apply Yaw first, then align to surface
+    const targetQuat = upAlignmentQ.mul(yawQ.w, yawQ.x, yawQ.y, yawQ.z);
+    
     const joltQuatSet = new Gfx3Jolt.Quat(targetQuat.x, targetQuat.y, targetQuat.z, targetQuat.w);
     gfx3JoltManager.bodyInterface.SetRotation(this.physicsBody.body.GetID(), joltQuatSet, Gfx3Jolt.EActivation_Activate);
 
+    // Precise Velocity
     const forward = targetQuat.rotateVector([0, 0, -1]);
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
-    if (!currentJoltVel) return { normal: didShootNormal, grenade: didShootGrenade, muzzlePos: [0, 0, 0], muzzleDir: [0, 0, -1] };
     
     const newVelX = forward[0] * this.speed;
     const newVelZ = forward[2] * this.speed;
+    
+    // Keep internal physics Y velocity but dampen vertical separation
     const newVelY = currentJoltVel.GetY();
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
@@ -233,19 +250,17 @@ export class Tank {
     );
     
     // 3. CHASSIS TILT (Acceleration-based lurch)
-    const acceleration = (this.speed - this.velocity) / (ts / 1000); 
+    // Disabled movement-based tilt per user request for a more stable platform
     this.velocity = this.speed; 
+    this.chassisTilt = 0;
     
-    const targetTilt = -acceleration * 0.01; 
-    this.chassisTilt = UT.LERP(this.chassisTilt, targetTilt, 12.0 * (ts / 1000));
-    
-    // Firing lurch
-    const firingLurch = this.recoil * 0.15; 
-    const finalTilt = UT.CLAMP(this.chassisTilt - firingLurch, -0.3, 0.3);
+    // Add firing lurch (nose up when firing)
+    const firingLurch = this.recoil * 0.12; 
+    const finalTilt = Math.max(-0.25, Math.min(0.25, -firingLurch));
 
-    // Out of bounds reset
-    if (pos.GetY() < -30.0) {
-        const resetPos = new Gfx3Jolt.RVec3(0, 10.0, 0);
+    // Teleport if out of bounds
+    if (pos.GetY() < -20.0) {
+        const resetPos = new Gfx3Jolt.RVec3(0, 5.0, 0);
         gfx3JoltManager.bodyInterface.SetPosition(this.physicsBody.body.GetID(), resetPos, Gfx3Jolt.EActivation_Activate);
         gfx3JoltManager.bodyInterface.SetLinearVelocity(this.physicsBody.body.GetID(), new Gfx3Jolt.Vec3(0, 0, 0));
         this.speed = 0;
@@ -253,8 +268,12 @@ export class Tank {
 
     // --- SYNC VISUALS ---
     const origin: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
-    const bodyRecoilOffset = this.recoil * -0.3; 
+
+    // RECOIL CALCULATION (Sharp kick, slow settle)
+    const bodyRecoilOffset = this.recoil * -0.25; 
     const tiltQ = Quaternion.createFromEuler(0, finalTilt, 0, 'YXZ');
+    
+    // Final body orientation with tilt and lurch
     const finalVisualQ = targetQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z);
 
     const recoiledOrigin: vec3 = [
@@ -264,7 +283,8 @@ export class Tank {
     ];
 
     const bodyMatrix = UT.MAT4_TRANSFORM(recoiledOrigin, [0, 0, 0], [1, 1, 1], finalVisualQ);
-    this.recoil = UT.LERP(this.recoil, 0, 10.0 * (ts / 1000));
+    this.recoil = UT.LERP(this.recoil, 0, 8.0 * (ts / 1000)); // Smoother recovery
+    
     this.body.enableManualTransform(bodyMatrix);
 
     const syncRigid = (mesh: Gfx3Mesh, localPos: vec3) => {
@@ -276,34 +296,29 @@ export class Tank {
     syncRigid(this.trackR, [1.425, -0.15, 0]);
     syncRigid(this.engine, [0, 0.3, 1.8]);
 
-    // 4. REALISTIC TURRET TRAVERSE (Limited degrees per second)
-    const targetTurretYaw = aimYaw;
-    let yawDiffT = UT.NORMALIZE_ANGLE(targetTurretYaw - this.turretYaw);
+    // 3. INDEPENDENT TURRET (Aligns to aimYaw)
+    let yawDiff = ((aimYaw - this.turretYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
     
-    // Constant speed traverse
-    const traverseSpeed = this.options.turretTraverseSpeed * (ts / 1000);
-    this.turretYaw += UT.CLAMP(yawDiffT, -traverseSpeed, traverseSpeed);
-    this.turretYaw = UT.CLAMP_ANGLE(this.turretYaw);
+    const turretTraverseSpeed = 25.0;
+    this.turretYaw += yawDiff * turretTraverseSpeed * (ts / 1000);
     
-    // Local yaw relative to chassis
-    const localYaw = UT.NORMALIZE_ANGLE(this.turretYaw - this.rotation);
+    const localYaw = (this.turretYaw - this.rotation);
     const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
     this.turret.enableManualTransform(turretMatrix);
  
-    // REALISTIC BARREL PITCH
-    const maxDepress = -0.1; 
-    const maxElevate = 0.6;
-    const targetBarrelPitch = UT.CLAMP(aimPitch, maxDepress, maxElevate);
-    
-    let pitchDiff = targetBarrelPitch - this.barrelPitch;
-    const pitchTraverseSpeed = this.options.barrelPitchSpeed * (ts / 1000);
-    this.barrelPitch += UT.CLAMP(pitchDiff, -pitchTraverseSpeed, pitchTraverseSpeed);
+    // BARREL PITCH (Smoothed)
+    const maxDepress = -0.15; 
+    const maxElevate = 0.55;
+    const targetPitch = Math.max(maxDepress, Math.min(maxElevate, aimPitch));
+    this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 4.0 * (ts / 1000));
     
     const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
 
+    // Reduced recoil slide to prevent clipping out the back of the turret
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);
     const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.08, -1.0 + barrelRecoilVis));
     const barrelMatrix = UT.MAT4_MULTIPLY(barrelPivotMatrix, pitchQ.toMatrix4());

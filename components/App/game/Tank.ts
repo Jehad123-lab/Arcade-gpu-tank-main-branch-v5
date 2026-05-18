@@ -182,10 +182,14 @@ export class Tank {
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
     
     // De-couple Y from horizontal movement for better gravity/slope interaction
+    // We apply a slight downward pressure to keep the tank "glued" to slopes
     const newVelX = forward[0] * this.speed;
     const newVelZ = forward[2] * this.speed;
     const verticalSlopeAssist = forward[1] * this.speed;
-    const newVelY = currentJoltVel.GetY() * 0.85 + verticalSlopeAssist;
+    
+    // Add a bit more downward pull if we're not moving much horizontally to keep it grounded
+    const extraGravity = Math.abs(this.speed) < 1.0 ? -0.5 : 0;
+    const newVelY = currentJoltVel.GetY() * 0.9 + verticalSlopeAssist + extraGravity;
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 

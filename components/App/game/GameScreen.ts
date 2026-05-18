@@ -316,48 +316,57 @@ export class GameScreen extends Screen {
     }
 
 
-    const finalTargetDist = this.isSniperMode ? 8.0 : this.targetCameraDistance;
+    const finalTargetDist = this.isSniperMode ? 6.0 : this.targetCameraDistance;
     this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
 
-    // HYBRID FREE-LOOK CAMERA (FROM SKILL.MD CONCEPTS)
-    // We use cameraYaw and cameraPitch (mouse-driven) instead of just tank rotation
+    // OVER-THE-SHOULDER CAMERA LOGIC
+    // We use a dedicated shoulder offset and smoothed look-at system
     const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
-    const cameraOffsetVec = rotQ.rotateVector([0, 0, this.cameraDistance]);
     
-    // Ideal position is behind the player relative to the VIEW direction
+    // 1. Calculate the ideal eye position
+    // Base distance behind, but offset to the side for "Shoulder" feel
+    const sideOffset = this.isSniperMode ? 0.8 : 2.5;
+    const heightOffset = 3.5;
+    
+    // Local camera vectors
+    const viewBack = rotQ.rotateVector([0, 0, this.cameraDistance]);
+    const viewRight = rotQ.rotateVector([sideOffset, 0, 0]);
+    
     const idealPos: vec3 = [
-        playerPos[0] + cameraOffsetVec[0],
-        playerPos[1] + cameraOffsetVec[1] + 3.0, // More height for better view
-        playerPos[2] + cameraOffsetVec[2]
+        playerPos[0] + viewBack[0] + viewRight[0],
+        playerPos[1] + viewBack[1] + heightOffset,
+        playerPos[2] + viewBack[2] + viewRight[2]
     ];
     
-    // Prevent camera from going under ground
-    if (idealPos[1] < 1.0) {
-        idealPos[1] = 1.0;
+    // 2. Terrain clipping prevention (Floor floor)
+    // Scale height floor based on pitch to avoid cutting through slopes
+    const pitchFactor = Math.max(0, this.cameraPitch);
+    const minHeight = playerPos[1] + 1.5 + (pitchFactor * 2.0);
+    if (idealPos[1] < minHeight) {
+        idealPos[1] = minHeight;
     }
     
-    // Position Smoothing (Chase LERP) - Slow down slightly to absorb terrain noise
-    const camAlpha = 1.0 - Math.exp(-9.0 * (ts / 1000)); 
+    // 3. Position Smoothing (Chase LERP)
+    const camAlpha = 1.0 - Math.exp(-12.0 * (ts / 1000)); 
     this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
     
-    // Shake applied before positioning
     const shakeX = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeY = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeZ = (Math.random() - 0.5) * this.shakeIntensity;
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     
-    // Focus on a point ahead of the tank in the camera view direction
-    // Smoothed look-at target to reduce jitter
+    // 4. Update the Look-At Target
+    // Focus slightly to the side of the tank to maintain the shoulder composition
+    const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0,-1]);
     const viewForward = rotQ.rotateVector([0, 0, -1]);
     const targetLook: vec3 = [
-        playerPos[0] + viewForward[0] * 50.0,
-        playerPos[1] + 1.2 + viewForward[1] * 50.0, // Lowered slightly 
-        playerPos[2] + viewForward[2] * 50.0
+        playerPos[0] + lookRight[0] + viewForward[0] * 100.0,
+        playerPos[1] + 1.2 + viewForward[1] * 100.0,
+        playerPos[2] + lookRight[2] + viewForward[2] * 100.0
     ];
     
-    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, targetLook, 1.0 - Math.exp(-15.0 * (ts / 1000)));
-
+    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, targetLook, 1.0 - Math.exp(-18.0 * (ts / 1000)));
     this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));

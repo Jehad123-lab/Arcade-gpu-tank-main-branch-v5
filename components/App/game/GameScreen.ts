@@ -271,12 +271,12 @@ export class GameScreen extends Screen {
     if (shots.normal) {
        this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player');
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.SHELL);
-       this.shakeIntensity = Math.max(this.shakeIntensity, 0.3);
+       this.shakeIntensity = Math.max(this.shakeIntensity, 0.12);
     }
     if (shots.grenade) {
        this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player');
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.GRENADE);
-       this.shakeIntensity = Math.max(this.shakeIntensity, 0.6);
+       this.shakeIntensity = Math.max(this.shakeIntensity, 0.25);
     }
 
     const tankP = this.tank.physicsBody.body.GetPosition();
@@ -595,7 +595,7 @@ export class GameScreen extends Screen {
               this.explosions.push(exp);
           }
           this.tank.recoil = Math.max(this.tank.recoil, 0.5);
-          this.shakeIntensity = Math.max(this.shakeIntensity, 0.5); 
+          this.shakeIntensity = Math.max(this.shakeIntensity, 0.2); 
       }
       
       if (p.type === ProjectileType.GRENADE) {
@@ -639,7 +639,7 @@ export class GameScreen extends Screen {
       if (distToPlayer < radius) {
           this.tank.hp -= damage;
           this.tank.recoil = Math.max(this.tank.recoil, 1.0);
-          this.shakeIntensity = Math.max(this.shakeIntensity, 0.8);
+          this.shakeIntensity = Math.max(this.shakeIntensity, 0.35);
       }
   }
 

@@ -288,7 +288,7 @@ export class Tank {
     syncToTurret(this.hatch, [0, 0.45, 0.3]);
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
-    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.125, 1]);
+    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.4, 1]);
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, muzzleLocalPos);
     const muzzleWorldPos: vec3 = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
     

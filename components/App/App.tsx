@@ -147,8 +147,9 @@ const Joystick = ({ onChange }: { onChange: (dir: { x: number, y: number }) => v
 
 const App = () => {
     const [isReady, setIsReady] = useState(false);
-    const [enemyCount, setEnemyCount] = useState(3);
+    const [enemyCount, setEnemyCount] = useState(0);
     const [playerHp, setPlayerHp] = useState(100);
+    const [score, setScore] = useState(0);
     const [isZoomed, setIsZoomed] = useState(false);
     const gameScreenRef = useRef<GameScreen | null>(null);
     const { width } = useWindowSize();
@@ -174,8 +175,8 @@ const App = () => {
 
         const interval = setInterval(() => {
             if (gameScreenRef.current) {
-                const count = gameScreenRef.current.enemies.filter(e => e.hp > 0).length;
-                setEnemyCount(count);
+                setEnemyCount(gameScreenRef.current.enemies.length);
+                setScore(gameScreenRef.current.score);
                 if (gameScreenRef.current.tank) {
                     setPlayerHp(gameScreenRef.current.tank.hp);
                 }
@@ -324,7 +325,7 @@ const App = () => {
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ color: Tokens.colors.contentDim, fontSize: '10px', fontFamily: Tokens.fonts.body, letterSpacing: '1px', textTransform: 'uppercase' }}>COMBAT POINTS</span>
-                            <span style={{ color: Tokens.colors.content, fontSize: '18px', fontFamily: Tokens.fonts.data, fontWeight: 600 }}>000000</span>
+                            <span style={{ color: Tokens.colors.content, fontSize: '18px', fontFamily: Tokens.fonts.data, fontWeight: 600 }}>{score.toString().padStart(6, '0')}</span>
                         </div>
                     </div>
                     

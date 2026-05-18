@@ -27,7 +27,7 @@ import {
 } from 'phosphor-react';
 import { Tank } from './Tank';
 import { Environment } from './Environment';
-import { Enemy } from './Enemy';
+import { Enemy, EnemyType } from './Enemy';
 import { Explosion } from './Explosion';
 import { createBoxMesh, createBulletMesh } from './GameUtils';
 import { ObjectPool } from '@lib/core/object_pool';
@@ -45,6 +45,7 @@ export interface Projectile {
   ownerId: string;
   mesh: Gfx3Mesh;
   lastVel: vec3;
+  damage: number;
 }
 
 // --- INPUT INTENT OBJECT ---
@@ -66,6 +67,8 @@ export class GameScreen extends Screen {
   projectiles: Projectile[] = [];
   shellMesh: Gfx3Mesh;
   grenadeMesh: Gfx3Mesh;
+  score: number = 0;
+  totalKills: number = 0;
   
   // Input State
   intent: InputIntent = {
@@ -99,6 +102,7 @@ export class GameScreen extends Screen {
     this.camera = new Gfx3Camera(0);
     this.tank = new Tank();
     this.level = new Environment();
+    this.enemies = [];
     
     this.explosionPool = new ObjectPool<Explosion>(new Explosion(), 600, (obj: Explosion) => {
         obj.active = false;
@@ -112,14 +116,6 @@ export class GameScreen extends Screen {
     this.shellMesh = createBulletMesh(); 
     // Grenade: Larger, dark grey sphere-like box
     this.grenadeMesh = createBoxMesh(0.7, 0.7, 0.7, [0.3, 0.3, 0.3]); 
-
-    // Spawn exactly 3 enemies as requested
-    while (this.enemies.length < 3) {
-       const x = (Math.random() - 0.5) * 120;
-       const z = (Math.random() - 0.5) * 120;
-       if (Math.abs(x) < 25 && Math.abs(z) < 25) continue;
-       this.enemies.push(new Enemy(x, 2, z));
-    }
 
     if (typeof window !== 'undefined') {
        window.addEventListener('pointerdown', this.handleGlobalPointerDown);
@@ -211,7 +207,25 @@ export class GameScreen extends Screen {
     
     const tankP = this.tank.physicsBody.body.GetPosition();
     this.cameraLookTarget = [tankP.GetX(), tankP.GetY() + 1.5, tankP.GetZ()];
+    
+    // Spawn exactly 3 enemies
+    for (let i = 0; i < 3; i++) {
+        this.spawnNewEnemy();
+    }
+
     this.isReady = true;
+  }
+
+  spawnNewEnemy() {
+    const dist = 60 + Math.random() * 40;
+    const angle = Math.random() * Math.PI * 2;
+    const x = Math.cos(angle) * dist;
+    const z = Math.sin(angle) * dist;
+    
+    const types = [EnemyType.STANDARD, EnemyType.SCOUT, EnemyType.HEAVY];
+    const type = types[Math.floor(Math.random() * types.length)];
+    
+    this.enemies.push(new Enemy(x, 5, z, type));
   }
 
   handleMouseMove = (data: any) => {
@@ -269,12 +283,12 @@ export class GameScreen extends Screen {
     );
     
     if (shots.normal) {
-       this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player');
+       this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 35);
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.SHELL);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.08);
     }
     if (shots.grenade) {
-       this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player');
+       this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 100);
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.GRENADE);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.18);
     }
@@ -282,27 +296,35 @@ export class GameScreen extends Screen {
     const tankP = this.tank.physicsBody.body.GetPosition();
     const playerPos: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
     
+    // Update Enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
-       const enemy = this.enemies[i];
-       
-       if (enemy.hp <= 0) {
-           if (enemy.physicsBody) {
-               gfx3JoltManager.remove(enemy.physicsBody.bodyId);
-               enemy.physicsBody = null as any;
-           }
-           this.enemies.splice(i, 1);
-           continue;
-       }
+        const enemy = this.enemies[i];
+        if (enemy.hp <= 0) {
+            if (enemy.physicsBody) {
+                gfx3JoltManager.remove(enemy.physicsBody.bodyId);
+                enemy.physicsBody = null as any;
+                this.totalKills++;
+                this.score += enemy.type === EnemyType.HEAVY ? 500 : (enemy.type === EnemyType.SCOUT ? 150 : 100);
+            }
+            this.enemies.splice(i, 1);
+            continue;
+        }
 
-       const res = enemy.update(ts, playerPos);
-       if (res.didShoot && res.muzzlePos && res.dir) {
-           this.spawnProjectile(ProjectileType.SHELL, res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], res.dir, 'enemy', 1.0);
-           const exp = this.explosionPool.acquire() as Explosion;
-           if (exp) {
-               exp.reset(res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], [1.0, 0.5, 0.1], res.dir);
-               this.explosions.push(exp);
-           }
-       }
+        const res = enemy.update(ts, playerPos);
+        if (res.didShoot && res.muzzlePos && res.dir) {
+            const damage = enemy.type === EnemyType.HEAVY ? 50 : (enemy.type === EnemyType.SCOUT ? 15 : 25);
+            this.spawnProjectile(ProjectileType.SHELL, res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], res.dir, 'enemy', 1.0, damage);
+            const exp = this.explosionPool.acquire() as Explosion;
+            if (exp) {
+                exp.reset(res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], [1.0, 0.5, 0.1], res.dir);
+                this.explosions.push(exp);
+            }
+        }
+    }
+
+    // Always maintain 3 enemies
+    if (this.enemies.length < 3) {
+        this.spawnNewEnemy();
     }
     
     this.updateProjectiles(ts);
@@ -390,8 +412,9 @@ export class GameScreen extends Screen {
     this.tank.draw(this.cameraYaw);
     
     for (const enemy of this.enemies) {
-       enemy.draw(this.cameraYaw);
+        enemy.draw(this.cameraYaw);
     }
+    
     for (const exp of this.explosions) {
        exp.draw();
     }
@@ -418,7 +441,7 @@ export class GameScreen extends Screen {
     gfx3Manager.endDrawing();
   }
 
-  spawnProjectile(type: ProjectileType, x: number, y: number, z: number, orientation: Quaternion | vec3, ownerId: string, speedMod: number = 1.0) {
+  spawnProjectile(type: ProjectileType, x: number, y: number, z: number, orientation: Quaternion | vec3, ownerId: string, speedMod: number = 1.0, damage: number = 35) {
     let finalDirection: vec3;
     let finalRotation: any;
 
@@ -477,7 +500,8 @@ export class GameScreen extends Screen {
       type,
       ownerId,
       mesh: pMesh,
-      lastVel: [pVel.GetX(), pVel.GetY(), pVel.GetZ()]
+      lastVel: [pVel.GetX(), pVel.GetY(), pVel.GetZ()],
+      damage
     });
   }
 
@@ -519,9 +543,11 @@ export class GameScreen extends Screen {
           for (const enemy of this.enemies) {
               if (enemy.hp <= 0) continue;
               const ePos = enemy.physicsBody.body.GetPosition();
-              const dist = UT.VEC3_DISTANCE(pPos3, [ePos.GetX(), ePos.GetY() + 0.3, ePos.GetZ()]); 
+              const dist = UT.VEC3_DISTANCE(pPos3, [ePos.GetX(), ePos.GetY() + 0.3 * enemy.stats.scale, ePos.GetZ()]); 
               
-              if (dist < 3.5) {
+              const hitRange = 3.5 * enemy.stats.scale;
+              if (dist < hitRange) {
+                  enemy.lastHitTime = Date.now();
                   this.onProjectileHit(p, enemy, pPos3);
                   destroyed = true;
                   break;
@@ -568,7 +594,7 @@ export class GameScreen extends Screen {
 
   onProjectileHit(p: Projectile, target: any, hitPos: vec3) {
       const isEnemy = target instanceof Enemy;
-      const dmg = p.type === ProjectileType.GRENADE ? 100 : 35;
+      const dmg = p.damage;
       
       if (isEnemy) {
           target.hp -= dmg;
@@ -623,6 +649,7 @@ export class GameScreen extends Screen {
           const dist = UT.VEC3_DISTANCE(origin, [ePos.GetX(), ePos.GetY(), ePos.GetZ()]);
           if (dist < radius) {
               enemy.hp -= damage;
+              enemy.lastHitTime = Date.now();
               const pushDir = UT.VEC3_NORMALIZE(UT.VEC3_SUBSTRACT([ePos.GetX(), ePos.GetY() + 0.5, ePos.GetZ()], origin));
               const pushForce = new Gfx3Jolt.Vec3(pushDir[0] * 2000, pushDir[1] * 1000, pushDir[2] * 2000);
               gfx3JoltManager.bodyInterface.AddImpulse(enemy.physicsBody.body.GetID(), pushForce);

@@ -6,6 +6,67 @@ import { Quaternion } from '@lib/core/quaternion';
 import { UT } from '@lib/core/utils';
 import { createBoxMesh, createUnitBoxMesh } from './GameUtils';
 
+export enum EnemyType {
+  STANDARD = 'standard',
+  SCOUT = 'scout',
+  HEAVY = 'heavy'
+}
+
+export enum EnemyState {
+  IDLE = 'idle',
+  PURSUE = 'pursue',
+  ATTACK = 'attack',
+  EVADE = 'evade'
+}
+
+interface EnemyStats {
+  hp: number;
+  maxHp: number;
+  speed: number;
+  rotSpeed: number;
+  shootInterval: number;
+  damage: number;
+  chassisColor: [number, number, number];
+  turretColor: [number, number, number];
+  scale: number;
+}
+
+const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
+  [EnemyType.STANDARD]: {
+    hp: 100,
+    maxHp: 100,
+    speed: 10,
+    rotSpeed: 1.0,
+    shootInterval: 2.5,
+    damage: 35,
+    chassisColor: [0.45, 0.55, 0.35],
+    turretColor: [0.4, 0.5, 0.3],
+    scale: 1.0
+  },
+  [EnemyType.SCOUT]: {
+    hp: 50,
+    maxHp: 50,
+    speed: 18,
+    rotSpeed: 2.0,
+    shootInterval: 1.2,
+    damage: 15,
+    chassisColor: [0.3, 0.4, 0.6], // Blueish
+    turretColor: [0.25, 0.35, 0.55],
+    scale: 0.8
+  },
+  [EnemyType.HEAVY]: {
+    hp: 250,
+    maxHp: 250,
+    speed: 6,
+    rotSpeed: 0.5,
+    shootInterval: 4.0,
+    damage: 70,
+    chassisColor: [0.5, 0.3, 0.3], // Reddish
+    turretColor: [0.45, 0.25, 0.25],
+    scale: 1.4
+  }
+};
+
 /**
  * The Enemy class represents an AI-controlled tank.
  * It uses static shared meshes for better performance across many instances.
@@ -26,7 +87,6 @@ export class Enemy {
 
   /**
    * Initializes shared meshes for all enemy instances.
-   * Supports falling back to procedural boxes if JSM files are missing.
    */
   static async initMeshes() {
     if (Enemy.initialized) return;
@@ -47,19 +107,14 @@ export class Enemy {
       Enemy.barrelMesh = barrelJSM;
     } catch (e) {
       console.warn('Enemy: Failed to load JSM models, falling back to boxes.', e);
-      
-      const chassisColor: [number, number, number] = [0.45, 0.55, 0.35]; // Slightly lighter green than player
-      const turretColor: [number, number, number] = [0.4, 0.5, 0.3];
-      Enemy.bodyMesh = createBoxMesh(2.25, 0.9, 3.3, chassisColor);
-      Enemy.turretMesh = createBoxMesh(1.65, 0.75, 1.65, turretColor);
-      Enemy.barrelMesh = createBoxMesh(0.3, 0.3, 2.25, [0.2, 0.2, 0.2]);
+      Enemy.bodyMesh = createBoxMesh(2.25, 0.9, 3.3, [1, 1, 1]);
+      Enemy.turretMesh = createBoxMesh(1.65, 0.75, 1.65, [1, 1, 1]);
+      Enemy.barrelMesh = createBoxMesh(0.3, 0.3, 2.25, [1, 1, 1]);
     }
 
-    const trackColor: [number, number, number] = [0.15, 0.15, 0.15];
-    const engineColor: [number, number, number] = [0.2, 0.2, 0.2];
-    Enemy.trackLMesh = createBoxMesh(0.6, 0.9, 3.6, trackColor);
-    Enemy.trackRMesh = createBoxMesh(0.6, 0.9, 3.6, trackColor);
-    Enemy.engineMesh = createBoxMesh(1.8, 0.6, 0.9, engineColor);
+    Enemy.trackLMesh = createBoxMesh(0.6, 0.9, 3.6, [0.15, 0.15, 0.15]);
+    Enemy.trackRMesh = createBoxMesh(0.6, 0.9, 3.6, [0.15, 0.15, 0.15]);
+    Enemy.engineMesh = createBoxMesh(1.8, 0.6, 0.9, [0.2, 0.2, 0.2]);
     Enemy.hatchMesh = createBoxMesh(0.6, 0.15, 0.6, [0.15, 0.15, 0.15]);
     Enemy.antennaMesh = createBoxMesh(0.05, 1.5, 0.05, [0.1, 0.1, 0.1]);
     Enemy.projMesh = createBoxMesh(0.6, 0.6, 0.6, [1.0, 0.2, 0.0]);
@@ -70,178 +125,216 @@ export class Enemy {
   }
 
   physicsBody: any;
+  type: EnemyType;
+  state: EnemyState = EnemyState.IDLE;
+  stats: EnemyStats;
   
   rotation: number = 0;
   velocity: number = 0;
   recoil: number = 0;
   shootCooldown: number = 0;
-  hp: number = 100;
+  hp: number;
   turretYaw: number = 0;
   chassisTilt: number = 0;
-  currentUp: vec3 = [0, 1, 0];
   visualQuat: quat = [0, 0, 0, 1];
   
-  constructor(x: number, y: number, z: number) {
-    // Note: initMeshes should be called externally to wait for async loading
+  // AI Params
+  lastHitTime: number = 0;
+  orbitDir: number = 1;
+  stateTimer: number = 0;
+  
+  constructor(x: number, y: number, z: number, type: EnemyType = EnemyType.STANDARD) {
+    this.type = type;
+    this.stats = ENEMY_STATS[type];
+    this.hp = this.stats.hp;
+    this.orbitDir = Math.random() > 0.5 ? 1 : -1;
+
     if (!Enemy.initialized) {
        Enemy.initMeshes(); 
     }
 
+    const s = this.stats.scale;
     this.physicsBody = gfx3JoltManager.addBox({
-      width: 3.45, height: 1.2, depth: 3.6,
+      width: 3.45 * s, height: 1.2 * s, depth: 3.6 * s,
       x, y: y + 0.5, z,
       motionType: Gfx3Jolt.EMotionType_Dynamic,
       layer: JOLT_LAYER_MOVING,
       settings: { 
           mAngularDamping: 2.0, 
-          mMassPropertiesOverride: 10000.0,
+          mMassPropertiesOverride: 10000.0 * (s * s * s),
       }
     });
+
+    this.rotation = Math.random() * Math.PI * 2;
   }
 
-  update(ts: number, targetPos: any): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3 } {
+  update(ts: number, playerPos: vec3): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3 } {
     if (this.hp <= 0) return { didShoot: false };
 
-    const speed = 10;
-    const rotSpeed = 1.0; // ~60 deg/sec
+    const dt = ts / 1000;
+    this.recoil = Math.max(0, this.recoil - dt * 5);
+    this.shootCooldown -= dt;
+    this.stateTimer -= dt;
 
-    this.recoil -= (ts / 1000) * 5; 
-    if (this.recoil < 0) this.recoil = 0;
-    
-    this.shootCooldown -= ts / 1000;
+    const pos = JOLT_RVEC3_TO_VEC3(this.physicsBody.body.GetPosition());
+    if (pos[1] < -20.0) { this.hp = 0; return { didShoot: false }; }
 
-    const pos = this.physicsBody.body.GetPosition();
-
-    if (pos.GetY() < -20.0) {
-        this.hp = 0; 
-        return { didShoot: false };
-    }
-
-    const qPhysics = this.physicsBody.body.GetRotation();
-    const currentQuat = new Quaternion(qPhysics.GetW(), qPhysics.GetX(), qPhysics.GetY(), qPhysics.GetZ());
-    
-    const myPos = JOLT_RVEC3_TO_VEC3(pos);
-    const dx = targetPos[0] - myPos[0];
-    const dz = targetPos[2] - myPos[2];
+    const dx = playerPos[0] - pos[0];
+    const dz = playerPos[2] - pos[2];
     const dist = Math.sqrt(dx*dx + dz*dz);
     const PI2 = Math.PI * 2;
+    
+    // --- FSM LOGIC ---
+    this.updateState(dist);
+
+    // --- AI BEHAVIOR ---
     let targetAngle = Math.atan2(-dx, -dz);
-    
-    // OBSTACLE AVOIDANCE
-    const castStartY = pos.GetY() + 0.5;
-    const qRot = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
-    const fLeft = qRot.rotateVector([-0.7, 0, -1.0]);
-    const fRight = qRot.rotateVector([0.7, 0, -1.0]);
-    
-    const rayDist = 12.0;
-    const lRay = gfx3JoltManager.createRay(pos.GetX(), castStartY, pos.GetZ(), pos.GetX() + fLeft[0] * rayDist, castStartY, pos.GetZ() + fLeft[2] * rayDist);
-    const rRay = gfx3JoltManager.createRay(pos.GetX(), castStartY, pos.GetZ(), pos.GetX() + fRight[0] * rayDist, castStartY, pos.GetZ() + fRight[2] * rayDist);
-    
-    const lHit = lRay.fraction < 1.0 && lRay.fraction > 0.15;
-    const rHit = rRay.fraction < 1.0 && rRay.fraction > 0.15;
-    
-    let isAvoiding = false;
-    if (lHit && !rHit) {
-        targetAngle += 1.2;
-        isAvoiding = true;
-    } else if (rHit && !lHit) {
-        targetAngle -= 1.2;
-        isAvoiding = true;
-    } else if (lHit && rHit) {
-        targetAngle += lRay.fraction < rRay.fraction ? 1.5 : -1.5;
-        isAvoiding = true;
+    let throttle = 0;
+
+    switch (this.state) {
+      case EnemyState.IDLE:
+        throttle = 0;
+        break;
+
+      case EnemyState.PURSUE:
+        throttle = 1.0;
+        break;
+
+      case EnemyState.ATTACK:
+        // Orbit logic
+        const orbitDist = 25;
+        const orbitAngle = targetAngle + (Math.PI / 2) * this.orbitDir;
+        targetAngle = orbitAngle;
+        
+        if (dist > orbitDist + 5) throttle = 1.0;
+        else if (dist < orbitDist - 5) throttle = -0.5;
+        else throttle = 0.2;
+        break;
+
+      case EnemyState.EVADE:
+        targetAngle = Math.atan2(dx, dz); // Move away
+        throttle = 1.5; // Sprint away
+        break;
     }
 
-    let bodyYawDiff = ((targetAngle - this.rotation) % PI2 + PI2) % PI2;
-    if (bodyYawDiff > Math.PI) bodyYawDiff -= Math.PI * 2;
+    // OBSTACLE AVOIDANCE
+    targetAngle = this.avoidObstacles(pos, targetAngle);
+
+    // --- MOVEMENT EXECUTION ---
+    this.applyMovement(ts, targetAngle, throttle);
+
+    // --- TURRET & SHOOTING ---
+    return this.updateCombat(ts, playerPos, targetAngle, dist);
+  }
+
+  private updateState(dist: number) {
+    const isHitRecently = Date.now() - this.lastHitTime < 1000;
+
+    if (isHitRecently && this.state !== EnemyState.EVADE) {
+      this.state = EnemyState.EVADE;
+      this.stateTimer = 2.0;
+    }
+
+    if (this.stateTimer > 0) return;
+
+    if (dist > 60) {
+      this.state = EnemyState.IDLE;
+    } else if (dist > 35) {
+      this.state = EnemyState.PURSUE;
+    } else {
+      this.state = EnemyState.ATTACK;
+      if (Math.random() < 0.05) this.orbitDir *= -1; // Randomly flip orbit
+    }
+  }
+
+  private avoidObstacles(pos: vec3, currentTargetAngle: number): number {
+    const castStartY = pos[1] + 0.5;
+    const qRot = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
+    const fLeft = qRot.rotateVector([-1.0, 0, -1.0]);
+    const fRight = qRot.rotateVector([1.0, 0, -1.0]);
     
-    const currentRotSpeed = isAvoiding ? rotSpeed * 1.5 : rotSpeed;
-    this.rotation += Math.sign(bodyYawDiff) * Math.min(Math.abs(bodyYawDiff), currentRotSpeed * (ts / 1000));
+    const rayDist = 15.0;
+    const lRay = gfx3JoltManager.createRay(pos[0], castStartY, pos[2], pos[0] + fLeft[0] * rayDist, castStartY, pos[2] + fLeft[2] * rayDist);
+    const rRay = gfx3JoltManager.createRay(pos[0], castStartY, pos[2], pos[0] + fRight[0] * rayDist, castStartY, pos[2] + fRight[2] * rayDist);
     
+    const lHit = lRay.fraction < 1.0 && lRay.fraction > 0.1;
+    const rHit = rRay.fraction < 1.0 && rRay.fraction > 0.1;
+    
+    if (lHit && !rHit) return currentTargetAngle + 1.0;
+    if (rHit && !lHit) return currentTargetAngle - 1.0;
+    if (lHit && rHit) return currentTargetAngle + (lRay.fraction < rRay.fraction ? 1.5 : -1.5);
+    
+    return currentTargetAngle;
+  }
+
+  private applyMovement(ts: number, targetAngle: number, throttle: number) {
+    const dt = ts / 1000;
+    const qPhysics = this.physicsBody.body.GetRotation();
+    const currentQuat = new Quaternion(qPhysics.GetW(), qPhysics.GetX(), qPhysics.GetY(), qPhysics.GetZ());
     const currentForward = currentQuat.rotateVector([0, 0, -1]);
     const currentYaw = Math.atan2(-currentForward[0], -currentForward[2]);
-    const uprightQuat = Quaternion.createFromEuler(currentYaw, 0, 0, 'YXZ');
-    
-    const currentUpVec = currentQuat.rotateVector([0, 1, 0]);
-    const tiltErrorX = -currentUpVec[2]; 
-    const tiltErrorZ = currentUpVec[0];  
 
+    let yawDiff = ((targetAngle - this.rotation) % (Math.PI * 2) + (Math.PI * 2)) % (Math.PI * 2);
+    if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    
+    this.rotation += Math.sign(yawDiff) * Math.min(Math.abs(yawDiff), this.stats.rotSpeed * dt);
+    
+    // Physics sync
     let physYawDiff = ((this.rotation - currentYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     if (physYawDiff > Math.PI) physYawDiff -= Math.PI * 2;
-    this.rotation = currentYaw + Math.max(-0.5, Math.min(0.5, physYawDiff));
     
-    const targetAngularVelY = physYawDiff * 15.0; 
+    const targetAngVelY = physYawDiff * 15.0; 
     const currentAngVel = this.physicsBody.body.GetAngularVelocity();
-    const newAngY = UT.LERP(currentAngVel.GetY(), targetAngularVelY, 1.0 - Math.exp(-15.0 * (ts / 1000)));
+    const newAngY = UT.LERP(currentAngVel.GetY(), targetAngVelY, 1.0 - Math.exp(-15.0 * dt));
 
-    // Dampen physical bouncy rotation, apply gentle righting force
-    const rightingStrength = Math.max(0, 1.0 - Math.abs(this.velocity) / 30.0) * 10.0;
-    const newAngX = currentAngVel.GetX() * 0.6 + tiltErrorX * rightingStrength;
-    const newAngZ = currentAngVel.GetZ() * 0.6 + tiltErrorZ * rightingStrength;
+    const currentUpVec = currentQuat.rotateVector([0, 1, 0]);
+    const rightingStrength = 10.0;
+    const newAngX = currentAngVel.GetX() * 0.6 - currentUpVec[2] * rightingStrength;
+    const newAngZ = currentAngVel.GetZ() * 0.6 + currentUpVec[0] * rightingStrength;
 
-    gfx3JoltManager.bodyInterface.SetAngularVelocity(
-        this.physicsBody.body.GetID(), 
-        new Gfx3Jolt.Vec3(newAngX, newAngY, newAngZ)
-    );
+    gfx3JoltManager.bodyInterface.SetAngularVelocity(this.physicsBody.body.GetID(), new Gfx3Jolt.Vec3(newAngX, newAngY, newAngZ));
 
-    let throttle = 0;
-    if (dist > 15) {
-        throttle = 1; 
-    } else if (dist < 10) {
-        throttle = -0.5; 
-    }
-
-    const targetVelocity = throttle * speed;
-    const accelInput = (targetVelocity - this.velocity);
-    const targetTilt = -accelInput * 0.1 * (Math.PI / 180);
-    this.chassisTilt = UT.LERP(this.chassisTilt, targetTilt, 5.0 * (ts / 1000));
-
-    const tiltQ = Quaternion.createFromEuler(this.chassisTilt, 0, 0, 'YXZ');
-    this.visualQuat = currentQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z);
-
-    const isBraking = (throttle > 0 && this.velocity < 0) || (throttle < 0 && this.velocity > 0);
-    const accelRate = throttle !== 0 ? (isBraking ? -20.0 : -8.0) : -12.0;
-    const accelAlphaValue = 1.0 - Math.exp(accelRate * (ts / 1000));
-    this.velocity = UT.LERP(this.velocity, targetVelocity, accelAlphaValue);
+    const targetVelocity = throttle * this.stats.speed;
+    this.velocity = UT.LERP(this.velocity, targetVelocity, 1.0 - Math.exp(-8.0 * dt));
 
     const forward = currentQuat.rotateVector([0, 0, -1]);
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
-    
-    // Strict forward movement
-    const newVelX = forward[0] * this.velocity;
-    const newVelZ = forward[2] * this.velocity;
-    const verticalAssist = forward[1] * this.velocity;
-    const newVelY = currentJoltVel.GetY() * (Math.abs(verticalAssist) > 0.1 ? 0.5 : 1.0) + verticalAssist;
-
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
-        new Gfx3Jolt.Vec3(newVelX, newVelY, newVelZ)
+        new Gfx3Jolt.Vec3(forward[0] * this.velocity, currentJoltVel.GetY(), forward[2] * this.velocity)
     );
-    
-    let didShoot = false;
-    let muzzlePos: vec3 | undefined = undefined;
-    let dir: vec3 | undefined = undefined;
 
-    let turretYawDiff = ((targetAngle - this.turretYaw) % PI2 + PI2) % PI2;
-    if (turretYawDiff > Math.PI) turretYawDiff -= Math.PI * 2;
-    
-    // Smooth weighted turret traverse
-    const traverseAlpha = 1.0 - Math.exp(-4.5 * (ts / 1000));
-    this.turretYaw += turretYawDiff * traverseAlpha;
-
-    if (dist < 40 && Math.abs(turretYawDiff) < 0.25 && Math.abs(bodyYawDiff) < 1.0 && this.shootCooldown <= 0) {
-        const muzzleData = this.getMuzzleData(this.visualQuat);
-        muzzlePos = muzzleData.muzzlePos;
-        dir = muzzleData.dir;
-        this.shootCooldown = 2.5; 
-        this.recoil = 1.0;
-        didShoot = true;
-    }
-    
-    return { didShoot, muzzlePos, dir };
+    // Visual tilt
+    const accelInput = (targetVelocity - this.velocity);
+    this.chassisTilt = UT.LERP(this.chassisTilt, -accelInput * 0.1 * (Math.PI / 180), 5.0 * dt);
+    const tiltQ = Quaternion.createFromEuler(this.chassisTilt, 0, 0, 'YXZ');
+    this.visualQuat = currentQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z);
   }
 
-  
+  private updateCombat(ts: number, playerPos: vec3, targetAngle: number, dist: number): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3 } {
+    const dt = ts / 1000;
+    const PI2 = Math.PI * 2;
+    
+    // Turret aiming directly at player
+    const pos = JOLT_RVEC3_TO_VEC3(this.physicsBody.body.GetPosition());
+    const dx = playerPos[0] - pos[0];
+    const dz = playerPos[2] - pos[2];
+    const playerAngle = Math.atan2(-dx, -dz);
+
+    let turretYawDiff = ((playerAngle - this.turretYaw) % PI2 + PI2) % PI2;
+    if (turretYawDiff > Math.PI) turretYawDiff -= Math.PI * 2;
+    this.turretYaw += turretYawDiff * (1.0 - Math.exp(-6.0 * dt));
+
+    if (dist < 45 && Math.abs(turretYawDiff) < 0.2 && this.shootCooldown <= 0 && this.state !== EnemyState.IDLE) {
+        const muzzleData = this.getMuzzleData(this.visualQuat);
+        this.shootCooldown = this.stats.shootInterval * (0.8 + Math.random() * 0.4); 
+        this.recoil = 1.0;
+        return { didShoot: true, muzzlePos: muzzleData.muzzlePos, dir: muzzleData.dir };
+    }
+    
+    return { didShoot: false };
+  }
+
   getMuzzleData(q: Quaternion): { muzzlePos: vec3, dir: vec3 } {
     const pos = this.physicsBody.body.GetPosition();
     const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
@@ -252,28 +345,25 @@ export class Enemy {
     const localYaw = (this.turretYaw - currentYaw);
     const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
 
-    const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85, 0));
+    const s = this.stats.scale;
+    const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
-    
     const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
-    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1, -1.2 + visualRecoilValue));
+    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, (-1.2 * s) + visualRecoilValue));
     
-    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.125, 1]);
+    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.125 * s, 1]);
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelPivotMatrix, muzzleLocalPos);
-    
     const muzzleWorldDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelPivotMatrix, new Float32Array([0, 0, -1, 0]));
     const muzzleWorldDir = UT.VEC3_NORMALIZE([muzzleWorldDirVec4[0], muzzleWorldDirVec4[1], muzzleWorldDirVec4[2]]);
     
-    return {
-       muzzlePos: [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]] as vec3,
-       dir: muzzleWorldDir
-    };
+    return { muzzlePos: [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]] as vec3, dir: muzzleWorldDir };
   }
 
   draw(cameraYaw: number = 0) {
     if (this.hp <= 0) return;
 
-    const scale: vec3 = [1, 1, 1];
+    const s = this.stats.scale;
+    const scale: vec3 = [s, s, s];
     const ZERO: vec3 = [0,0,0];
 
     const pos = this.physicsBody.body.GetPosition();
@@ -284,10 +374,15 @@ export class Enemy {
     const finalVisualQ = this.visualQuat.mul(recoilQ.w, recoilQ.x, recoilQ.y, recoilQ.z);
 
     const bodyMatrix = UT.MAT4_TRANSFORM(origin, ZERO, scale, finalVisualQ);
+    
+    // Tint meshes
+    Enemy.bodyMesh.setTag(0, 1, this.stats.chassisColor[0], this.stats.chassisColor[1], this.stats.chassisColor[2]);
+    Enemy.turretMesh.setTag(0, 1, this.stats.turretColor[0], this.stats.turretColor[1], this.stats.turretColor[2]);
+
     gfx3MeshRenderer.drawMesh(Enemy.bodyMesh, bodyMatrix);
 
     const syncRigid = (mesh: Gfx3Mesh, localPos: vec3) => {
-        const localMatrix = UT.MAT4_TRANSFORM(localPos, [0, 0, 0], [1, 1, 1], new Quaternion());
+        const localMatrix = UT.MAT4_TRANSFORM([localPos[0]*s, localPos[1]*s, localPos[2]*s], [0, 0, 0], scale, new Quaternion());
         gfx3MeshRenderer.drawMesh(mesh, UT.MAT4_MULTIPLY(bodyMatrix, localMatrix));
     };
 
@@ -300,48 +395,40 @@ export class Enemy {
     const localYaw = (this.turretYaw - currentYaw);
     const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
 
-    const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85, 0));
+    const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4()); 
     gfx3MeshRenderer.drawMesh(Enemy.turretMesh, turretMatrix);
 
     const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
-    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1, -1.2 + visualRecoilValue));
+    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, (-1.2 * s) + visualRecoilValue));
     gfx3MeshRenderer.drawMesh(Enemy.barrelMesh, barrelPivotMatrix);
     
     const syncToTurret = (mesh: Gfx3Mesh, localPos: vec3) => {
-        const localMatrix = UT.MAT4_TRANSLATE(localPos[0], localPos[1], localPos[2]);
+        const localMatrix = UT.MAT4_TRANSLATE(localPos[0]*s, localPos[1]*s, localPos[2]*s);
         gfx3MeshRenderer.drawMesh(mesh, UT.MAT4_MULTIPLY(turretMatrix, localMatrix));
     };
 
-    syncToTurret(Enemy.hatchMesh, [0, 0.375 + 0.075, 0.3]);
-    syncToTurret(Enemy.antennaMesh, [-0.6, 0.375 + 0.75, 0.6]);
+    syncToTurret(Enemy.hatchMesh, [0, 0.45, 0.3]);
+    syncToTurret(Enemy.antennaMesh, [-0.6, 1.125, 0.6]);
+
+    this.drawHealthBar(origin, this.hp, this.stats.maxHp, cameraYaw);
   }
 
   drawHealthBar(origin: vec3, hp: number, maxHp: number, cameraYaw: number = 0) {
       const hpPercentage = Math.max(0, hp / maxHp);
-      const barMesh = hpPercentage > 0.5 ? Enemy.hpGreen : Enemy.hpRed;
-      
-      const barWidth = 1.5;
-      const barHeight = 0.2;
-      const barDepth = 0.2;
-      
-      // Calculate scale
+      const barMesh = hpPercentage > 0.4 ? Enemy.hpGreen : Enemy.hpRed;
+      const barWidth = 2.0 * this.stats.scale;
       const scaleX = barWidth * hpPercentage;
-      
-      // Billboarding
       const barRotation = Quaternion.createFromEuler(cameraYaw, 0, 0, 'YXZ');
-      
-      // Offset local
       const offsetLocal = [-(barWidth - scaleX) / 2, 0, 0] as vec3;
       const offsetWorld = barRotation.rotateVector(offsetLocal);
       
       const matBar = UT.MAT4_TRANSFORM(
-          [origin[0] + offsetWorld[0], origin[1] + 2.5, origin[2] + offsetWorld[2]], 
+          [origin[0] + offsetWorld[0], origin[1] + 3.0 * this.stats.scale, origin[2] + offsetWorld[2]], 
           [0, 0, 0], 
-          [scaleX, barHeight, barDepth], 
+          [scaleX, 0.2, 0.2], 
           barRotation
       );
-      
       gfx3MeshRenderer.drawMesh(barMesh, matBar);
   }
 }

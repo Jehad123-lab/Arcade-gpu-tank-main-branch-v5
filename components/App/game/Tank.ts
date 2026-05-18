@@ -290,8 +290,10 @@ export class Tank {
 
     // Reduced recoil slide to prevent clipping out the back of the turret
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);
-    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.08, -1.0 + barrelRecoilVis));
-    const barrelMatrix = UT.MAT4_MULTIPLY(barrelPivotMatrix, pitchQ.toMatrix4());
+    // Correct Barrel Pivot: Align at the turret base, rotate, then translate along the new forward arc
+    const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.08, 0));
+    const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
+    const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, -1.125 + barrelRecoilVis));
     this.barrel.enableManualTransform(barrelMatrix);
     
     this.shellRecoil = UT.LERP(this.shellRecoil, 0, 10.0 * (ts / 1000));
@@ -305,12 +307,14 @@ export class Tank {
     syncToTurret(this.hatch, [0, 0.45, 0.3]);
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
-    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -2.4, 1]);
+    // Muzzle is at the end of the barrel mesh (which is length 2.25, centered, so tip is at -1.125)
+    // We add a tiny offset to avoid self-collision/z-fighting with flash effects
+    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.15, 1]);
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, muzzleLocalPos);
     const muzzleWorldPos: vec3 = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
     
-    // Use the same TIP position to calculate world direction for consistency
-    const tipLocalPos: vec4 = new Float32Array([0, 0, -3.0, 1]);
+    // Use a point further along the same vector to calculate world direction accurately
+    const tipLocalPos: vec4 = new Float32Array([0, 0, -2.0, 1]);
     const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, tipLocalPos);
     const tipWorldPos: vec3 = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
     

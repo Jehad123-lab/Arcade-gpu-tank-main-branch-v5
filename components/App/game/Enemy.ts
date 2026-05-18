@@ -31,6 +31,7 @@ interface EnemyStats {
   turretColor: [number, number, number];
   accentColor: [number, number, number];
   scale: number;
+  barrelLength: number;
 }
 
 const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
@@ -44,7 +45,8 @@ const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     chassisColor: [0.15, 0.15, 0.15], // Dark Charcoal
     turretColor: [0.2, 0.2, 0.2],
     accentColor: [1.0, 0.4, 0.0], // Neon Orange
-    scale: 1.0
+    scale: 1.0,
+    barrelLength: 2.3
   },
   [EnemyType.SCOUT]: {
     hp: 60,
@@ -56,7 +58,8 @@ const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     chassisColor: [0.1, 0.1, 0.1],
     turretColor: [0.15, 0.1, 0.2],
     accentColor: [0.7, 0.2, 1.0], // Neon Purple
-    scale: 0.8
+    scale: 0.8,
+    barrelLength: 1.8
   },
   [EnemyType.HEAVY]: {
     hp: 350,
@@ -68,7 +71,8 @@ const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     chassisColor: [0.05, 0.05, 0.05],
     turretColor: [0.1, 0.05, 0.05],
     accentColor: [1.0, 0.0, 0.0], // Threat Red
-    scale: 1.5
+    scale: 1.5,
+    barrelLength: 2.8
   },
   [EnemyType.ELITE]: {
     hp: 600,
@@ -80,7 +84,8 @@ const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     chassisColor: [0.0, 0.0, 0.0],
     turretColor: [0.1, 0.1, 0.1],
     accentColor: [0.0, 1.0, 0.5], // Toxic Green
-    scale: 1.3
+    scale: 1.3,
+    barrelLength: 2.5
   }
 };
 
@@ -139,6 +144,8 @@ export class Enemy {
   stats: EnemyStats;
   
   rotation: number = 0;
+  turretYaw: number = 0;
+  barrelPitch: number = 0;
   velocity: number = 0;
   recoil: number = 0;
   shootCooldown: number = 0;
@@ -340,6 +347,11 @@ export class Enemy {
     if (turretYawDiff > Math.PI) turretYawDiff -= Math.PI * 2;
     this.turretYaw += turretYawDiff * (1.0 - Math.exp(-6.0 * dt));
 
+    const dy = playerPos[1] - (pos[1] + 0.85 * this.stats.scale);
+    const dist2D = Math.sqrt(dx*dx + dz*dz);
+    const targetPitch = Math.atan2(dy, dist2D);
+    this.barrelPitch += (targetPitch - this.barrelPitch) * (1.0 - Math.exp(-4.0 * dt));
+
     if (dist < 45 && Math.abs(turretYawDiff) < 0.2 && this.shootCooldown <= 0 && this.state !== EnemyState.IDLE) {
         const muzzleData = this.getMuzzleData(this.visualQuat);
         this.shootCooldown = this.stats.shootInterval * (0.8 + Math.random() * 0.4); 
@@ -363,13 +375,26 @@ export class Enemy {
     const s = this.stats.scale;
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
-    const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
-    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, (-1.2 * s) + visualRecoilValue));
     
-    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.125 * s, 1]);
-    const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelPivotMatrix, muzzleLocalPos);
-    const muzzleWorldDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelPivotMatrix, new Float32Array([0, 0, -1, 0]));
-    const muzzleWorldDir = UT.VEC3_NORMALIZE([muzzleWorldDirVec4[0], muzzleWorldDirVec4[1], muzzleWorldDirVec4[2]]);
+    // Correct Pivot: attach at turret, rotate pitch, then offset forward
+    const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
+    const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
+    const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, 0));
+    const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
+    const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, (-this.stats.barrelLength * 0.5 * s) + visualRecoilValue));
+    
+    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -this.stats.barrelLength * 0.5 * s, 1]);
+    const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, muzzleLocalPos);
+    
+    // Calculate direction using a point further out for precision
+    const tipLocalPos: vec4 = new Float32Array([0, 0, -this.stats.barrelLength * 1.0 * s, 1]);
+    const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, tipLocalPos);
+    
+    const muzzleWorldDir = UT.VEC3_NORMALIZE([
+        tipWorldPosVec4[0] - muzzleWorldPosVec4[0],
+        tipWorldPosVec4[1] - muzzleWorldPosVec4[1],
+        tipWorldPosVec4[2] - muzzleWorldPosVec4[2]
+    ]);
     
     return { muzzlePos: [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]] as vec3, dir: muzzleWorldDir };
   }
@@ -424,8 +449,11 @@ export class Enemy {
     gfx3MeshRenderer.drawMesh(turretMesh, turretMatrix);
 
     const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
-    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, (-1.2 * s) + visualRecoilValue));
-    gfx3MeshRenderer.drawMesh(barrelMesh, barrelPivotMatrix);
+    const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
+    const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, 0));
+    const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
+    const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, (-this.stats.barrelLength * 0.5 * s) + visualRecoilValue));
+    gfx3MeshRenderer.drawMesh(barrelMesh, barrelMatrix);
     
     const syncToTurret = (mesh: Gfx3Mesh, localPos: vec3) => {
         const localMatrix = UT.MAT4_TRANSLATE(localPos[0]*s, localPos[1]*s, localPos[2]*s);

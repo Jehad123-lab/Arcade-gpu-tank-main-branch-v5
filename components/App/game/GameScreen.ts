@@ -155,13 +155,13 @@ export class GameScreen extends Screen {
   };
 
   handleMouseDown = (e: MouseEvent) => {
-    if (e.button === 2) { // Right Click
+    if (e.button === 0 && inputManager.isPointerLockCaptured()) { // Left Click (Normal Shell)
         this.isSniperMode = true;
     }
   };
 
   handleMouseUp = (e: MouseEvent) => {
-    if (e.button === 2) {
+    if (e.button === 0) {
         this.isSniperMode = false;
     }
   };

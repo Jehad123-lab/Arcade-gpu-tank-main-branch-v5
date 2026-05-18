@@ -149,15 +149,19 @@ export class Tank {
     const throttle = (Math.abs(moveDir.y) < 0.05) ? 0 : moveDir.y;
     const steer = (Math.abs(moveDir.x) < 0.05) ? 0 : -moveDir.x;
 
-    // LINEAR SPEED - Real Tank Speed (Capped at ~50km/h)
-    const TANK_MAX_SPEED = 12.0; 
+    // Responsive Acceleration & Braking
+    const TANK_MAX_SPEED = 14.0; 
     let targetSpeed = throttle * TANK_MAX_SPEED;
-    const linearAccel = throttle !== 0 ? 1.8 : 0.8; // Sluggish, heavy acceleration
+    
+    // Check if we are braking (trying to go opposite of current speed)
+    const isBraking = (throttle > 0 && this.speed < -0.1) || (throttle < 0 && this.speed > 0.1);
+    const linearAccel = throttle !== 0 ? (isBraking ? 4.5 : 2.5) : 1.2; 
+    
     this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-linearAccel * (ts / 1000)));
 
     // ANGULAR SPEED (Rotation - heavy pivot feel)
-    const pivotBoost = Math.abs(this.speed) < 2.0 ? 1.2 : 0.8;
-    const targetTurnSpeed = steer * 1.2 * pivotBoost; // 1.2 rad/s max
+    const pivotBoost = Math.abs(this.speed) < 3.0 ? 1.5 : 0.9;
+    const targetTurnSpeed = steer * 1.5 * pivotBoost; 
     this.rotation += targetTurnSpeed * (ts / 1000);
     this.rotation = UT.CLAMP_ANGLE(this.rotation);
 
@@ -181,15 +185,13 @@ export class Tank {
     const forward = targetQuat.rotateVector([0, 0, -1]);
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
     
-    // De-couple Y from horizontal movement for better gravity/slope interaction
-    // We apply a slight downward pressure to keep the tank "glued" to slopes
     const newVelX = forward[0] * this.speed;
     const newVelZ = forward[2] * this.speed;
-    const verticalSlopeAssist = forward[1] * this.speed;
     
-    // Add a bit more downward pull if we're not moving much horizontally to keep it grounded
-    const extraGravity = Math.abs(this.speed) < 1.0 ? -0.5 : 0;
-    const newVelY = currentJoltVel.GetY() * 0.9 + verticalSlopeAssist + extraGravity;
+    // Maintain vertical velocity from physics to handle gravity naturally, 
+    // but add a "Slope assist" to pull the tank up/down ramps manually to avoid separation
+    const verticalSlopeAssist = forward[1] * this.speed;
+    const newVelY = currentJoltVel.GetY() + verticalSlopeAssist * 0.5;
 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
@@ -199,30 +201,32 @@ export class Tank {
     const pos = this.physicsBody.body.GetPosition();
     
     // 3. CHASSIS TILT (Acceleration-based lurch)
-    const acceleration = (this.speed - this.velocity); 
+    const acceleration = (this.speed - this.velocity) / (ts / 1000); 
     this.velocity = this.speed; 
     
-    // Smooth the acceleration-based tilt
-    const targetTilt = -acceleration * 0.15 * (Math.PI / 180); 
-    this.chassisTilt = UT.LERP(this.chassisTilt, targetTilt, 5.0 * (ts / 1000));
+    // Smooth the acceleration-based tilt (Pitch)
+    const targetTilt = -acceleration * 0.012; 
+    this.chassisTilt = UT.LERP(this.chassisTilt, targetTilt, 8.0 * (ts / 1000));
     
     // Add firing lurch (nose up when firing)
-    const firingLurch = this.recoil * 0.05;
-    const finalTilt = this.chassisTilt - firingLurch;
+    const firingLurch = this.recoil * 0.08;
+    const finalTilt = Math.max(-0.25, Math.min(0.25, this.chassisTilt - firingLurch));
 
     // Teleport if out of bounds
     if (pos.GetY() < -20.0) {
-        const resetPos = new Gfx3Jolt.RVec3(0, 2.0, 0);
+        const resetPos = new Gfx3Jolt.RVec3(0, 5.0, 0);
         gfx3JoltManager.bodyInterface.SetPosition(this.physicsBody.body.GetID(), resetPos, Gfx3Jolt.EActivation_Activate);
         gfx3JoltManager.bodyInterface.SetLinearVelocity(this.physicsBody.body.GetID(), new Gfx3Jolt.Vec3(0, 0, 0));
+        this.speed = 0;
     }
 
     // --- SYNC VISUALS ---
-    const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
+    const origin: vec3 = [pos.GetX(), pos.GetY() - 0.1, pos.GetZ()];
 
     // RECOIL CALCULATION (Sharp kick, slow settle)
-    const bodyRecoilOffset = this.recoil * -0.22; // Slightly reduced kick for stability
-    const tiltQ = Quaternion.createFromEuler(finalTilt, 0, 0, 'YXZ');
+    const bodyRecoilOffset = this.recoil * -0.25; 
+    // IMPORTANT: In YXZ Euler, f=Y, s=X, t=Z. Tilt is X axis rotation.
+    const tiltQ = Quaternion.createFromEuler(0, finalTilt, 0, 'YXZ');
     
     // Final body orientation with tilt and lurch
     const finalVisualQ = currentQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z);

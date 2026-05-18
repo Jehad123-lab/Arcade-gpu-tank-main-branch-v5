@@ -4,9 +4,6 @@ Tracking all issues, from critical bugs to minor suggestions.
 
 ## Critical (App Breaking)
 
--   **[RESOLVED] CAMERA INVERSION**: Camera yaw was inverted (decreased on right mouse movement). Changed to additive mapping for a standard feel.
--   **[RESOLVED) SHOOTING BUG**: Passing damage values into the projectile `speedMod` parameter caused shells to fire at 6000+ units/sec, making them vanish instantly. Fixed parameter mapping in `spawnProjectile` calls.
--   **[RESOLVED] FIRING RELIABILITY**: Enhanced left-click detection in `GameScreen` to ensure firing triggers consistently alongside Sniper Mode.
 -   **[RESOLVED] PROJECTILE PHYSICS DESYNC**: Shells weren't passing rotation to Jolt. Visually rotated, physically axis-aligned. Fixed by passing Euler-to-Quat to `addBox`.
 -   **[RESOLVED] RECOIL CLIPPING**: Projectiles spawned at static offsets while barrel was recoiling, causing shells to spawn inside the turret. Fixed with dynamic muzzle offset.
 -   **[RESOLVED] ELASTIC BOUNCE BUG**: Shells didn't explode on walls because speed didn't drop (elastic collision). Fixed by checking vector direction changes.

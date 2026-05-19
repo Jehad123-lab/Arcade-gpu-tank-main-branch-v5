@@ -1077,8 +1077,13 @@ class UT {
     const b21 = a21 * a10 - a11 * a20;
 
     let det = a00 * b01 + a01 * b11 + a02 * b21;
-    if (!det) {
-      throw new Error('UT::MAT4_INVERT(): det is invalid !');
+    if (!det || isNaN(det)) {
+      console.warn('UT::MAT3_INVERT(): det is invalid ! Returning identity matrix.');
+      out[0] = 1; out[1] = 0; out[2] = 0; out[3] = 0;
+      out[4] = 0; out[5] = 1; out[6] = 0; out[7] = 0;
+      out[8] = 0; out[9] = 0; out[10] = 1; out[11] = 0;
+      out[12] = 0; out[13] = 0; out[14] = 0; out[15] = 1;
+      return out;
     }
 
     det = 1.0 / det;
@@ -1410,8 +1415,13 @@ class UT {
     const b11 = a22 * a33 - a23 * a32;
 
     let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
-    if (!det) {
-      throw new Error('UT::MAT4_INVERT(): det is invalid !');
+    if (!det || isNaN(det)) {
+      console.warn('UT::MAT4_INVERT(): det is invalid ! Returning identity matrix.');
+      out[0] = 1; out[1] = 0; out[2] = 0; out[3] = 0;
+      out[4] = 0; out[5] = 1; out[6] = 0; out[7] = 0;
+      out[8] = 0; out[9] = 0; out[10] = 1; out[11] = 0;
+      out[12] = 0; out[13] = 0; out[14] = 0; out[15] = 1;
+      return out;
     }
 
     det = 1.0 / det;

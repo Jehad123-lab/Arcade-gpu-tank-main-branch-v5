@@ -152,7 +152,7 @@ export class Enemy {
   hp: number;
   turretYaw: number = 0;
   chassisTilt: number = 0;
-  visualQuat: quat = [0, 0, 0, 1];
+  visualQuat: Quaternion = new Quaternion();
   
   // AI Params
   lastHitTime: number = 0;
@@ -339,9 +339,13 @@ export class Enemy {
     
     // Turret aiming directly at player (compensating for chassis tilt)
     const pos = JOLT_RVEC3_TO_VEC3(this.physicsBody.body.GetPosition());
-    const dx = playerPos[0] - pos[0];
-    const dy = playerPos[1] - (pos[1] + 0.85 * this.stats.scale);
-    const dz = playerPos[2] - pos[2];
+    let dx = playerPos[0] - pos[0];
+    let dy = playerPos[1] - (pos[1] + 0.85 * this.stats.scale);
+    let dz = playerPos[2] - pos[2];
+    
+    if (dx === 0 && dy === 0 && dz === 0) {
+      dx = 0; dy = 0; dz = 1;
+    }
     
     const globalAimDir = UT.VEC3_NORMALIZE([dx, dy, dz]);
     
@@ -350,7 +354,7 @@ export class Enemy {
     const localAimDir = invChassisQ.rotateVector(globalAimDir);
 
     const targetLocalYaw = Math.atan2(-localAimDir[0], -localAimDir[2]);
-    const targetLocalPitch = Math.asin(localAimDir[1]);
+    const targetLocalPitch = Math.asin(Math.max(-1, Math.min(1, localAimDir[1])));
 
     let turretYawDiff = ((targetLocalYaw - this.turretYaw) % PI2 + PI2) % PI2;
     if (turretYawDiff > Math.PI) turretYawDiff -= Math.PI * 2;

@@ -87,8 +87,8 @@ export class GameScreen extends Screen {
   cameraPitch = 0.45;
   cameraDistance = 10;
   cameraOffset: vec3 = [0, 4, 8]; 
-  cameraLookTarget: vec3 = [0, 0, 0];
-  cameraPos: vec3 = [0, 0, 0];
+  cameraLookTarget: vec3 = [0, 1.5, 0];
+  cameraPos: vec3 = [0, 12, 20];
   
   isReady: boolean = false;
   rightClickFire: boolean = false;
@@ -234,8 +234,10 @@ export class GameScreen extends Screen {
     
     if (inputManager.isPointerLockCaptured()) {
         const sensitivity = 0.003;
-        this.cameraYaw -= data.movementX * sensitivity;
-        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - data.movementY * sensitivity));
+        const movX = isNaN(data.movementX) ? 0 : (data.movementX || 0);
+        const movY = isNaN(data.movementY) ? 0 : (data.movementY || 0);
+        this.cameraYaw -= movX * sensitivity;
+        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - movY * sensitivity));
         this.lastMouseManualTS = Date.now();
     }
   };
@@ -399,8 +401,6 @@ export class GameScreen extends Screen {
     const shakeY = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeZ = (Math.random() - 0.5) * this.shakeIntensity;
     
-    this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
-    
     // 4. Update the Look-At Target
     // Focus slightly to the side of the tank to maintain the shoulder composition
     const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0,-1]);
@@ -412,6 +412,15 @@ export class GameScreen extends Screen {
     ];
     
     this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, targetLook, 1.0 - Math.exp(-18.0 * (ts / 1000)));
+
+    if (isNaN(this.cameraPos[0]) || isNaN(this.cameraLookTarget[0])) {
+      this.cameraPos = [0, 12, 20];
+      this.cameraLookTarget = [0, 1.5, 0];
+      this.cameraPitch = 0.5;
+      this.cameraYaw = 0;
+    }
+
+    this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));

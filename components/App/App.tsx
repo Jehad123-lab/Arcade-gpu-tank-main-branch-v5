@@ -413,7 +413,7 @@ const App = () => {
                 <div style={{ pointerEvents: 'auto' }}>
                     {isMobile && <Joystick onChange={(dir) => {
                          if (gameScreenRef.current) {
-                            gameScreenRef.current.virtualMoveDir = { x: dir.x, y: -dir.y };
+                            gameScreenRef.current.moveDirInput = { x: dir.x, y: -dir.y };
                          }
                     }} />}
                 </div>

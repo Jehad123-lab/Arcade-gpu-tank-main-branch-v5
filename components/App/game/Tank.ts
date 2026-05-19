@@ -159,7 +159,7 @@ export class Tank {
 
     // Stationary Turning Logic (Simulate Tracks)
     if (Math.abs(moveDir.x) > 0.1 && this.speed < 5.0) {
-        const turnSpeed = 2.5 * -moveDir.x;
+        const turnSpeed = 2.5 * moveDir.x; // Flip to match rotation logic
         this.physicsCar.body.SetAngularVelocity(new Gfx3Jolt.Vec3(0, turnSpeed, 0));
     }
 
@@ -191,11 +191,21 @@ export class Tank {
     syncRigid(this.trackR, [1.425, -0.1, 0]);
     syncRigid(this.engine, [0, 0.3, 1.8]); // Engine at the back
 
-    // INDEPENDENT TURRET (Matches Camera Yaw)
-    // Using CW-based rotation difference converted to CCW for createFromEuler.
-    // rotation 0 is North (Z+), aimYaw 0 is South (Z-).
-    this.turretYaw = this.rotation - aimYaw - Math.PI;
-    const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
+    // INDEPENDENT TURRET (Smoothly Traverse to aimYaw)
+    let yawDiff = ((aimYaw - this.turretYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    
+    const turretTraverseSpeed = 4.0; // rad per second
+    const traverseAmount = turretTraverseSpeed * (ts / 1000);
+    
+    if (Math.abs(yawDiff) < traverseAmount) {
+        this.turretYaw = aimYaw;
+    } else {
+        this.turretYaw += Math.sign(yawDiff) * traverseAmount;
+    }
+
+    const localYaw = this.turretYaw - this.rotation;
+    const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());

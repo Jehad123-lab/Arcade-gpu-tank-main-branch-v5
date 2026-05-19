@@ -233,9 +233,9 @@ export class GameScreen extends Screen {
     this.mouseY = data.clientY;
     
     if (inputManager.isPointerLockCaptured()) {
-        const sensitivity = 0.003;
-        this.cameraYaw += data.movementX * sensitivity;
-        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - data.movementY * sensitivity));
+        const sensitivity = 0.005;
+        this.cameraYaw -= data.movementX * sensitivity;
+        this.cameraPitch = Math.max(-0.1, Math.min(Math.PI / 2 - 0.1, this.cameraPitch - data.movementY * sensitivity));
         this.lastMouseManualTS = Date.now();
     }
   };
@@ -364,36 +364,25 @@ export class GameScreen extends Screen {
     const finalTargetDist = (this.isSniperMode ? 6.0 : this.targetCameraDistance) + speedDistOffset;
     this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
 
-    // OVER-THE-SHOULDER CAMERA LOGIC
-    // We use a dedicated shoulder offset and smoothed look-at system
-    const rotQForCam = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
-    
-    // 1. Calculate the ideal eye position
-    // Base distance behind, but offset to the side for "Shoulder" feel
-    const sideOffsetIn = this.isSniperMode ? 0.8 : 1.5;
-    const heightOffsetIn = 2.2;
-    
-    // Local camera vectors
-    const viewBack = rotQForCam.rotateVector([0, 0, this.cameraDistance]);
-    const viewRight = rotQForCam.rotateVector([sideOffsetIn, 0, 0]);
-    
-    const eyePosJolt = this.tank.physicsCar.body.GetPosition();
-    const eyePlayerPosIn: vec3 = [eyePosJolt.GetX(), eyePosJolt.GetY(), eyePosJolt.GetZ()];
+    // CENTERED CHASE CAMERA LOGIC
+    const cy = this.cameraYaw;
+    const cp = this.cameraPitch;
+    const camOffset = [
+        Math.sin(cy) * Math.cos(cp) * this.cameraDistance,
+        Math.sin(cp) * this.cameraDistance,
+        Math.cos(cy) * Math.cos(cp) * this.cameraDistance
+    ] as vec3;
 
+    const eyePosJolt = this.tank.physicsCar.body.GetPosition();
+    const targetHeightOffset = 1.5;
+    
     const idealPos: vec3 = [
-        eyePlayerPosIn[0] + viewBack[0] + viewRight[0],
-        eyePlayerPosIn[1] + viewBack[1] + heightOffsetIn,
-        eyePlayerPosIn[2] + viewBack[2] + viewRight[2]
+        eyePosJolt.GetX() + camOffset[0],
+        eyePosJolt.GetY() + camOffset[1] + targetHeightOffset,
+        eyePosJolt.GetZ() + camOffset[2]
     ];
     
-    // 2. Terrain clipping prevention (Floor floor)
-    const pitchFactor = Math.max(0, this.cameraPitch);
-    const minHeight = eyePlayerPosIn[1] + 1.2 + (pitchFactor * 1.5);
-    if (idealPos[1] < minHeight) {
-        idealPos[1] = minHeight;
-    }
-    
-    // 3. Position Smoothing (Chase LERP)
+    // Position Smoothing (Chase LERP)
     const camAlphaSpeed = 1.0 - Math.exp(-12.0 * (ts / 1000)); 
     this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlphaSpeed);
     
@@ -403,16 +392,15 @@ export class GameScreen extends Screen {
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     
-    // 4. Update the Look-At Target
-    const lookRight = rotQForCam.rotateVector([sideOffsetIn * 0.5, 0,-1]);
-    const viewForward = rotQForCam.rotateVector([0, 0, -1]);
-    const targetLook: vec3 = [
-        playerPos[0] + lookRight[0] + viewForward[0] * 100.0,
-        playerPos[1] + 1.2 + viewForward[1] * 100.0,
-        playerPos[2] + lookRight[2] + viewForward[2] * 100.0
+    // Update the Look-At Target
+    // Using a simpler centered target look-at
+    const desiredLookTarget: vec3 = [
+        eyePosJolt.GetX(),
+        eyePosJolt.GetY() + targetHeightOffset,
+        eyePosJolt.GetZ()
     ];
     
-    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, targetLook, 1.0 - Math.exp(-18.0 * (ts / 1000)));
+    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, desiredLookTarget, 1.0 - Math.exp(-18.0 * (ts / 1000)));
     this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));

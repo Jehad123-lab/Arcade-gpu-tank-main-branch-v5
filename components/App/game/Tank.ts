@@ -192,8 +192,9 @@ export class Tank {
     syncRigid(this.engine, [0, 0.3, 1.8]); // Engine at the back
 
     // INDEPENDENT TURRET (Matches Camera Yaw)
-    // Both aimYaw and this.rotation are now CCW.
-    this.turretYaw = aimYaw - this.rotation;
+    // Using CW-based rotation difference converted to CCW for createFromEuler.
+    // rotation 0 is North (Z+), aimYaw 0 is South (Z-).
+    this.turretYaw = this.rotation - aimYaw - Math.PI;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));

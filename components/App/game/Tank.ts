@@ -203,7 +203,7 @@ export class Tank {
  
     // BARREL PITCH (Matches Camera Pitch)
     this.barrelPitch = aimPitch; 
-    this.barrelPitch = Math.max(-0.5, Math.min(1.0, this.barrelPitch));
+    this.barrelPitch = Math.max(-0.6, Math.min(1.2, this.barrelPitch));
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);
@@ -232,12 +232,11 @@ export class Tank {
     const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, tipRelPos);
     this.tipPos = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
     
-    const m = barrelRotMatrix;
-    const barrelWorldQ = Quaternion.createFromMatrix([
-        m[0], m[1], m[2],
-        m[4], m[5], m[6],
-        m[8], m[9], m[10]
-    ]);
+    // Calculate world orientation of the barrel.
+    // Combinatory approach: Tank Orientation * Flip * Turret Yaw * Barrel Pitch
+    const barrelLocalQ = Quaternion.createFromEuler(this.turretYaw, this.barrelPitch, 0, 'YXZ');
+    const barrelWorldQ = visualRotation.mul(barrelLocalQ.w, barrelLocalQ.x, barrelLocalQ.y, barrelLocalQ.z);
+    
     const muzzleDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, new Float32Array([0, 0, -1, 0]));
     this.muzzleDir = UT.VEC3_NORMALIZE([muzzleDirVec4[0], muzzleDirVec4[1], muzzleDirVec4[2]]);
 

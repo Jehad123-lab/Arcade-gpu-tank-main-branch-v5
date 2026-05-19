@@ -393,12 +393,10 @@ export class Enemy {
     const muzzleWorldDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, new Float32Array([0, 0, -1, 0]));
     const muzzleWorldDir = UT.VEC3_NORMALIZE([muzzleWorldDirVec4[0], muzzleWorldDirVec4[1], muzzleWorldDirVec4[2]]);
     
-    const m = barrelRotMatrix;
-    const barrelQuat = Quaternion.createFromMatrix([
-        m[0], m[1], m[2],
-        m[4], m[5], m[6],
-        m[8], m[9], m[10]
-    ]);
+    // Calculate world orientation of the barrel.
+    // Combinatory approach: Enemy Body Orientation * Turret Yaw * Barrel Pitch
+    const barrelLocalQ = Quaternion.createFromEuler(this.turretYaw, this.stats.barrelPitch, 0, 'YXZ');
+    const barrelQuat = this.visualQuat.mul(barrelLocalQ.w, barrelLocalQ.x, barrelLocalQ.y, barrelLocalQ.z);
 
     return { 
       muzzlePos: [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]] as vec3, 

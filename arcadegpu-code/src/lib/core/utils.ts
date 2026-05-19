@@ -1750,6 +1750,15 @@ class UT {
     out[13] = position[1];
     out[14] = position[2];
     out[15] = 1;
+    
+    if (isNaN(out[0])) {
+      console.warn("MAT4_LOOKAT NaN DETECTED", position, target, vertical);
+      out[0] = 1; out[1] = 0; out[2] = 0; out[3] = 0;
+      out[4] = 0; out[5] = 1; out[6] = 0; out[7] = 0;
+      out[8] = 0; out[9] = 0; out[10] = 1; out[11] = 0;
+      out[12] = position[0] || 0; out[13] = position[1] || 0; out[14] = position[2] || 0; out[15] = 1;
+    }
+    
     return out;
   }
 

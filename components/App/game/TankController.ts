@@ -160,11 +160,12 @@ export class TankController {
         const firingLurch = this.recoil * 0.12; 
         const finalTilt = Math.max(-0.25, Math.min(0.25, -firingLurch));
 
-        if (pos.GetY() < -20.0) {
+        if (pos.GetY() < -20.0 || isNaN(pos.GetX())) {
             const resetPos = new Gfx3Jolt.RVec3(0, 5.0, 0);
             gfx3JoltManager.bodyInterface.SetPosition(this.physicsBody.body.GetID(), resetPos, Gfx3Jolt.EActivation_Activate);
             gfx3JoltManager.bodyInterface.SetLinearVelocity(this.physicsBody.body.GetID(), new Gfx3Jolt.Vec3(0, 0, 0));
             this.speed = 0;
+            if (isNaN(pos.GetX())) { console.warn("Reset Tank due to NaN Position!"); }
         }
 
         const origin: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];

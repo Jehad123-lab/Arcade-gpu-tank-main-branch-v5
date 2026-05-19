@@ -12,6 +12,16 @@ import { coreManager, SizeMode } from '@lib/core/core_manager';
 import { gfx3PostRenderer, PostParam } from '@lib/gfx3_post/gfx3_post_renderer';
 import { gfx3JoltManager, JOLT_LAYER_MOVING, JOLT_RVEC3_TO_VEC3, VEC3_TO_JOLT_RVEC3, Gfx3Jolt } from '@lib/gfx3_jolt/gfx3_jolt_manager';
 import { Gfx3Camera } from '@lib/gfx3_camera/gfx3_camera';
+
+export let globalErrorDebug = "";
+const oldWarn = console.warn;
+console.warn = function(...args) {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes("NaN")) {
+        globalErrorDebug = args.join(" ");
+    }
+    oldWarn.apply(console, args);
+}
+
 import { Gfx3Mesh } from '@lib/gfx3_mesh/gfx3_mesh';
 import { Quaternion } from '@lib/core/quaternion';
 import { UT } from '@lib/core/utils';
@@ -264,6 +274,8 @@ export class GameScreen extends Screen {
 
     const tankP = this.tank.physicsBody.body.GetPosition();
     const playerPos: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
+    if (isNaN(this.cameraYaw)) this.cameraYaw = 0;
+    if (isNaN(this.cameraPitch)) this.cameraPitch = 0.45;
     const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
     const sideOffset = this.isSniperMode ? 0.8 : 1.5;
     const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0, -1]);
@@ -424,6 +436,7 @@ export class GameScreen extends Screen {
     this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));
+    if (isNaN(this.shakeIntensity)) this.shakeIntensity = 0;
   }
 
   handleTankMuzzleFlash(pos: vec3, forward: vec3, type: ProjectileType) {

@@ -70,6 +70,13 @@ export class GameScreen extends Screen {
   score: number = 0;
   totalKills: number = 0;
   
+  // Targeting Data
+  targetDist: number = 0;
+  targetPoint: vec3 = [0, 0, 0];
+  isTargetingEnemy: boolean = false;
+  reloadProgress: number = 1.0;
+  grenadeReloadProgress: number = 1.0;
+  
   // Input State
   intent: InputIntent = {
     moveDir: { x: 0, y: 0 },
@@ -260,26 +267,64 @@ export class GameScreen extends Screen {
     this.intent.isFiringNormal = this.virtualFireNormal || inputManager.isActiveAction('FIRE') || (inputManager.isMouseDown() && !this.rightClickFire);
     this.intent.isFiringGrenade = this.virtualFireGrenade || this.rightClickFire || inputManager.isActiveAction('FIRE_ALT');
 
-    const pos = this.tank.physicsCar.body.GetPosition();
-    const playerPos: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
-    const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
-    const sideOffset = this.isSniperMode ? 0.8 : 1.5;
-    const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0, -1]);
-    const viewForward = rotQ.rotateVector([0, 0, -1]);
-    
-    const targetLook: vec3 = [
-        playerPos[0] + lookRight[0] + viewForward[0] * 100.0,
-        playerPos[1] + 1.2 + viewForward[1] * 100.0,
-        playerPos[2] + lookRight[2] + viewForward[2] * 100.0
+    // --- WORLD SPACE AIMING ---
+    const camPos = this.camera.getPosition();
+    const cy = this.cameraYaw;
+    const cp = this.cameraPitch;
+    const camForward = [
+        -Math.sin(cy) * Math.cos(cp),
+        -Math.sin(cp),
+        -Math.cos(cy) * Math.cos(cp)
+    ] as vec3;
+
+    const rayEnd = [
+        camPos[0] + camForward[0] * 1000,
+        camPos[1] + camForward[1] * 1000,
+        camPos[2] + camForward[2] * 1000
     ];
 
-    const turretPos: vec3 = [playerPos[0], playerPos[1] + 0.9, playerPos[2]];
-    const dx = targetLook[0] - turretPos[0];
-    const dy = targetLook[1] - turretPos[1];
-    const dz = targetLook[2] - turretPos[2];
+    const ray = gfx3JoltManager.createRay(camPos[0], camPos[1], camPos[2], rayEnd[0], rayEnd[1], rayEnd[2]);
+    let targetPoint: vec3;
+    
+    this.isTargetingEnemy = false;
+    if (ray.body && ray.fraction < 1.0) {
+        targetPoint = [
+            camPos[0] + (rayEnd[0] - camPos[0]) * ray.fraction,
+            camPos[1] + (rayEnd[1] - camPos[1]) * ray.fraction,
+            camPos[2] + (rayEnd[2] - camPos[2]) * ray.fraction
+        ];
+        
+        // Check if hitting enemy
+        const hitBodyId = ray.body.GetID().GetIndex();
+        for (const enemy of this.enemies) {
+            if (enemy.physicsBody && enemy.physicsBody.bodyId === hitBodyId) {
+                this.isTargetingEnemy = true;
+                break;
+            }
+        }
+    } else {
+        targetPoint = rayEnd;
+    }
 
-    this.intent.aimYaw = this.cameraYaw;
-    this.intent.aimPitch = this.cameraPitch;
+    this.targetPoint = targetPoint;
+    this.targetDist = UT.VEC3_DISTANCE(camPos, targetPoint);
+
+    // Turret is at playerPos + [0, 0.9, 0] approx
+    const pos = this.tank.physicsCar.body.GetPosition();
+    const turretPivot: vec3 = [pos.GetX(), pos.GetY() + 0.9, pos.GetZ()];
+    
+    const dx = targetPoint[0] - turretPivot[0];
+    const dy = targetPoint[1] - turretPivot[1];
+    const dz = targetPoint[2] - turretPivot[2];
+    
+    const distXZ = Math.sqrt(dx * dx + dz * dz);
+    
+    this.intent.aimYaw = Math.atan2(dx, dz);
+    this.intent.aimPitch = Math.atan2(dy, distXZ);
+
+    // Reload Progress
+    this.reloadProgress = 1.0 - this.tank.shellRecoil;
+    this.grenadeReloadProgress = 1.0 - this.tank.grenadeRecoil;
   }
 
   update(ts: number) {

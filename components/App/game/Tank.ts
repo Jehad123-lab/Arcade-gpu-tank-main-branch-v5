@@ -211,10 +211,17 @@ export class Tank {
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
     this.turret.enableManualTransform(turretMatrix);
  
-    // BARREL PITCH (Matches Camera Pitch)
-    // Positive pitch is UP in our coordinate system now.
-    this.barrelPitch = aimPitch; 
-    this.barrelPitch = Math.max(-0.6, Math.min(1.0, this.barrelPitch));
+    // BARREL PITCH (Smoothly traverse to aimPitch)
+    const targetPitch = Math.max(-0.6, Math.min(1.0, aimPitch));
+    const barrelTraverseSpeed = 2.0; // rad per second
+    const traverseAmountP = barrelTraverseSpeed * (ts / 1000);
+    
+    if (Math.abs(targetPitch - this.barrelPitch) < traverseAmountP) {
+        this.barrelPitch = targetPitch;
+    } else {
+        this.barrelPitch += Math.sign(targetPitch - this.barrelPitch) * traverseAmountP;
+    }
+
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);

@@ -151,6 +151,11 @@ const App = () => {
     const [playerHp, setPlayerHp] = useState(100);
     const [score, setScore] = useState(0);
     const [isZoomed, setIsZoomed] = useState(false);
+    const [targetDist, setTargetDist] = useState(0);
+    const [isTargetingEnemy, setIsTargetingEnemy] = useState(false);
+    const [reloadProgress, setReloadProgress] = useState(1.0);
+    const [grenadeReload, setGrenadeReload] = useState(1.0);
+    
     const gameScreenRef = useRef<GameScreen | null>(null);
     const { width } = useWindowSize();
     
@@ -181,6 +186,10 @@ const App = () => {
                     setPlayerHp(gameScreenRef.current.tank.hp);
                 }
                 setIsZoomed(gameScreenRef.current.isSniperMode);
+                setTargetDist(gameScreenRef.current.targetDist);
+                setIsTargetingEnemy(gameScreenRef.current.isTargetingEnemy);
+                setReloadProgress(gameScreenRef.current.reloadProgress);
+                setGrenadeReload(gameScreenRef.current.grenadeReloadProgress);
             }
         }, 100);
 
@@ -359,42 +368,86 @@ const App = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 pointerEvents: 'none',
+                zIndex: 10,
             }}>
                 <motion.div 
                     animate={{ 
-                        scale: isZoomed ? 1.5 : 1.0,
-                        opacity: isZoomed ? 1.0 : 0.7 
+                        scale: isZoomed ? 1.4 : 1.0,
+                        opacity: 1.0
                     }}
                     style={{
-                        width: '40px',
-                        height: '40px',
-                        border: `1px solid ${isZoomed ? Tokens.colors.accent : Tokens.colors.contentDim}`,
+                        width: '60px',
+                        height: '60px',
+                        border: `1px solid ${isTargetingEnemy ? Tokens.colors.accent : Tokens.colors.contentDim}`,
                         borderRadius: '2px',
                         position: 'relative',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        backdropFilter: 'blur(1px)',
                     }}
                 >
-                    <div style={{ position: 'absolute', top: '-10px', left: '50%', width: '1px', height: '6px', background: Tokens.colors.accent }} />
-                    <div style={{ position: 'absolute', bottom: '-10px', left: '50%', width: '1px', height: '6px', background: Tokens.colors.accent }} />
-                    <div style={{ position: 'absolute', left: '-10px', top: '50%', width: '6px', height: '1px', background: Tokens.colors.accent }} />
-                    <div style={{ position: 'absolute', right: '-10px', top: '50%', width: '6px', height: '1px', background: Tokens.colors.accent }} />
-                    <div style={{ width: '4px', height: '4px', backgroundColor: Tokens.colors.content, borderRadius: '100%' }} />
+                    {/* Corners */}
+                    <div style={{ position: 'absolute', top: -1, left: -1, width: '8px', height: '8px', borderLeft: '2px solid cyan', borderTop: '2px solid cyan' }} />
+                    <div style={{ position: 'absolute', top: -1, right: -1, width: '8px', height: '8px', borderRight: '2px solid cyan', borderTop: '2px solid cyan' }} />
+                    <div style={{ position: 'absolute', bottom: -1, left: -1, width: '8px', height: '8px', borderLeft: '2px solid cyan', borderBottom: '2px solid cyan' }} />
+                    <div style={{ position: 'absolute', bottom: -1, right: -1, width: '8px', height: '8px', borderRight: '2px solid cyan', borderBottom: '2px solid cyan' }} />
+
+                    {/* Indicators */}
+                    <div style={{ position: 'absolute', top: '-12px', left: '50%', width: '1px', height: '8px', background: isTargetingEnemy ? Tokens.colors.accent : 'cyan' }} />
+                    
+                    {/* Range Data */}
+                    <div style={{ 
+                        position: 'absolute', 
+                        right: '-80px', 
+                        top: '0',
+                        color: 'cyan',
+                        fontFamily: Tokens.fonts.data,
+                        fontSize: '10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                    }}>
+                        <div style={{ opacity: 0.5 }}>RNG</div>
+                        <div style={{ fontSize: '14px', fontWeight: 600 }}>{targetDist.toFixed(1)}m</div>
+                    </div>
+
+                    {/* Reload Info */}
+                    <div style={{ 
+                        position: 'absolute', 
+                        left: '-80px', 
+                        top: '0',
+                        color: reloadProgress < 0.99 ? Tokens.colors.accent : 'cyan',
+                        fontFamily: Tokens.fonts.data,
+                        fontSize: '10px',
+                        width: '60px'
+                    }}>
+                        <div style={{ opacity: 0.5 }}>RELOAD</div>
+                        <div style={{ width: '100%', height: '3px', background: 'rgba(0,255,255,0.1)', marginTop: '4px', position: 'relative' }}>
+                             <motion.div 
+                                animate={{ width: `${reloadProgress * 100}%` }}
+                                style={{ height: '100%', background: reloadProgress < 0.99 ? Tokens.colors.accent : 'cyan' }}
+                             />
+                        </div>
+                    </div>
+
+                    <div style={{ width: '4px', height: '4px', backgroundColor: isTargetingEnemy ? Tokens.colors.accent : '#FFF', borderRadius: '100%', boxShadow: isTargetingEnemy ? `0 0 10px ${Tokens.colors.accent}` : 'none' }} />
                     
                     {isZoomed && (
                         <motion.div 
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 0.2 }}
                             style={{ 
                                 position: 'absolute',
-                                width: '120%',
-                                height: '120%',
-                                border: `1px solid ${Tokens.colors.accent}`,
-                                opacity: 0.3,
+                                width: '200%',
+                                height: '200%',
+                                border: '1px solid cyan',
                                 borderRadius: '100%'
                             }} 
-                        />
+                        >
+                             <div style={{ position: 'absolute', top: 0, left: '50%', height: '100%', borderLeft: '1px dashed cyan', opacity: 0.5 }} />
+                             <div style={{ position: 'absolute', left: 0, top: '50%', width: '100%', borderTop: '1px dashed cyan', opacity: 0.5 }} />
+                        </motion.div>
                     )}
                 </motion.div>
             </div>

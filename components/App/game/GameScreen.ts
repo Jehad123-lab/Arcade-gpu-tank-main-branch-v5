@@ -570,7 +570,7 @@ export class GameScreen extends Screen {
               const ePos = enemy.physicsBody.body.GetPosition();
               const dist = UT.VEC3_DISTANCE(pPos3, [ePos.GetX(), ePos.GetY() + 0.3 * enemy.stats.scale, ePos.GetZ()]); 
               
-              const hitRange = 4.5 * enemy.stats.scale;
+              const hitRange = 2.8 * enemy.stats.scale;
               if (dist < hitRange) {
                   enemy.lastHitTime = Date.now();
                   this.onProjectileHit(p, enemy, pPos3);
@@ -580,7 +580,8 @@ export class GameScreen extends Screen {
           }
       } else {
           const distToPlayer = UT.VEC3_DISTANCE(pPos3, [playerPos3[0], playerPos3[1] + 0.5, playerPos3[2]]);
-          if (distToPlayer < 3.5) {
+          // Reduced radius to prevent self-collision (Muzzle is at 3.2m)
+          if (distToPlayer < 2.2) {
               this.onProjectileHit(p, this.tank, pPos3);
               destroyed = true;
           }

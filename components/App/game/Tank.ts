@@ -70,20 +70,20 @@ export class Tank {
       y: 5.0, 
       z: 0,
       size: [2.5, 1.0, 3.8],
-      mass: 8000, 
-      maxEngineTorque: 80000, 
-      clutchStrength: 100.0,
+      mass: 12000, 
+      maxEngineTorque: 120000, 
+      clutchStrength: 150.0,
       wheelRadius: 0.5,
       wheelWidth: 0.5,
       wheelOffsetHorizontal: 1.5,
       wheelOffsetVertical: 0.3,
-      maxSteerAngle: 40, 
+      maxSteerAngle: 35, 
       suspensionMaxLength: 0.3,
       suspensionMinLength: 0.1,
       fourWheelDrive: true,
-      airResistance: 0.05, 
-      rollingResistance: 0.05, 
-      friction: 4.0 
+      airResistance: 0.2, 
+      rollingResistance: 0.2, 
+      friction: 8.0 
     });
   }
 
@@ -158,8 +158,8 @@ export class Tank {
     this.rotation = Math.atan2(forwardVec[0], forwardVec[2]);
 
     // Stationary Turning Logic (Simulate Tracks)
-    if (Math.abs(moveDir.x) > 0.1 && this.speed < 2.0) {
-        const turnSpeed = 2.0 * -moveDir.x;
+    if (Math.abs(moveDir.x) > 0.1 && this.speed < 4.0) {
+        const turnSpeed = 3.5 * -moveDir.x;
         this.physicsCar.body.SetAngularVelocity(new Gfx3Jolt.Vec3(0, turnSpeed, 0));
     }
 
@@ -222,10 +222,15 @@ export class Tank {
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
     // Muzzle Logic (Barrel points at Z-)
-    // Explicitly moving it 5.0m away from the pivot, well past the 2.25m barrel.
-    const muzzleRelPos: vec4 = new Float32Array([0, 0, -5.0, 1]); 
+    // The barrel model is roughly 2.25m long. We spawn 3.0m from the turret pivot.
+    const muzzleRelPos: vec4 = new Float32Array([0, 0, -3.2, 1]); 
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, muzzleRelPos);
     this.muzzlePos = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
+    
+    // Tip position for precision effects
+    const tipRelPos: vec4 = new Float32Array([0, 0, -4.2, 1]);
+    const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, tipRelPos);
+    this.tipPos = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
     
     const m = barrelRotMatrix;
     const barrelWorldQ = Quaternion.createFromMatrix([

@@ -81,9 +81,9 @@ export class Tank {
       suspensionMaxLength: 0.25,
       suspensionMinLength: 0.1,
       fourWheelDrive: true,
-      airResistance: 0.5, 
-      rollingResistance: 0.5, 
-      friction: 12.0 
+      airResistance: 0.8, 
+      rollingResistance: 1.2, 
+      friction: 15.0 
     });
   }
 
@@ -137,9 +137,9 @@ export class Tank {
       this.recoil = 1.8; 
     }
 
-    this.shellRecoil = Math.max(0, this.shellRecoil - (ts / 1000) * 5.0);
-    this.grenadeRecoil = Math.max(0, this.grenadeRecoil - (ts / 1000) * 1.2);
-    this.recoil = Math.max(0, this.recoil - (ts / 1000) * 8.0);
+    this.shellRecoil = Math.max(0, this.shellRecoil - (ts / 1000) * 8.0);
+    this.grenadeRecoil = Math.max(0, this.grenadeRecoil - (ts / 1000) * 2.5);
+    this.recoil = Math.max(0, this.recoil - (ts / 1000) * 12.0);
 
     // Physics State
     const pos = this.physicsCar.body.GetPosition();
@@ -192,10 +192,9 @@ export class Tank {
     syncRigid(this.engine, [0, 0.3, 1.8]); // Engine at the back
 
     // INDEPENDENT TURRET (Matches Camera Yaw)
-    // The tank physics front is Z+.
-    // Camera aimYaw (relative to Z-) and this.rotation (relative to Z+) have mismatched signs/references.
-    // Correct formula to keep turret tracked to world aimYaw:
-    this.turretYaw = aimYaw + this.rotation - Math.PI;
+    // Both aimYaw and this.rotation are Clockwise in this coordinate system.
+    // Correct local yaw is the difference between world target and world body.
+    this.turretYaw = aimYaw - this.rotation + Math.PI;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));
@@ -203,8 +202,9 @@ export class Tank {
     this.turret.enableManualTransform(turretMatrix);
  
     // BARREL PITCH (Matches Camera Pitch)
-    this.barrelPitch = aimPitch; 
-    this.barrelPitch = Math.max(-0.6, Math.min(1.2, this.barrelPitch));
+    // aimPitch increases when looking up. In our barrel rotation, positive pitch is looking down.
+    this.barrelPitch = -aimPitch; 
+    this.barrelPitch = Math.max(-1.0, Math.min(0.6, this.barrelPitch));
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);

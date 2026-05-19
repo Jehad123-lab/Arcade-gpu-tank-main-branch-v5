@@ -393,9 +393,6 @@ export class Enemy {
     const muzzleWorldDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, new Float32Array([0, 0, -1, 0]));
     const muzzleWorldDir = UT.VEC3_NORMALIZE([muzzleWorldDirVec4[0], muzzleWorldDirVec4[1], muzzleWorldDirVec4[2]]);
     
-    // Calculate world orientation of the barrel.
-    // Combinatory approach: Enemy Body Orientation * Turret Yaw * Barrel Pitch
-    // We negate yaw/pitch because our tracking variables are CW, but createFromEuler is CCW.
     const barrelLocalQ = Quaternion.createFromEuler(-this.turretYaw, -this.barrelPitch, 0, 'YXZ');
     const barrelQuat = this.visualQuat.mul(barrelLocalQ.w, barrelLocalQ.x, barrelLocalQ.y, barrelLocalQ.z);
 

@@ -70,13 +70,6 @@ export class GameScreen extends Screen {
   score: number = 0;
   totalKills: number = 0;
   
-  // Targeting Data
-  targetDist: number = 0;
-  targetPoint: vec3 = [0, 0, 0];
-  isTargetingEnemy: boolean = false;
-  reloadProgress: number = 1.0;
-  grenadeReloadProgress: number = 1.0;
-  
   // Input State
   intent: InputIntent = {
     moveDir: { x: 0, y: 0 },
@@ -207,13 +200,13 @@ export class GameScreen extends Screen {
 
     this.camera.setPosition(0, 12, 20); // Start at cy=0 position offset (0, 12, distance)
     this.camera.lookAt(0, 0, 0);
-    this.cameraYaw = Math.PI; // Initialize facing Z+ (Tank Front)
+    this.cameraYaw = 0; // aimYaw
     this.cameraPitch = 0.5; // aimPitch
     this.cameraDistance = 15;
     this.camera.getView().setBgColor(0.53, 0.81, 0.92, 1.0); // Sky blue
     
-    const pos = this.tank.physicsCar.body.GetPosition();
-    this.cameraLookTarget = [pos.GetX(), pos.GetY() + 1.5, pos.GetZ()];
+    const tankP = this.tank.physicsBody.body.GetPosition();
+    this.cameraLookTarget = [tankP.GetX(), tankP.GetY() + 1.5, tankP.GetZ()];
     
     // Spawn exactly 3 enemies
     for (let i = 0; i < 3; i++) {
@@ -240,9 +233,9 @@ export class GameScreen extends Screen {
     this.mouseY = data.clientY;
     
     if (inputManager.isPointerLockCaptured()) {
-        const sensitivity = 0.005;
+        const sensitivity = 0.003;
         this.cameraYaw -= data.movementX * sensitivity;
-        this.cameraPitch = Math.max(-0.1, Math.min(Math.PI / 2 - 0.1, this.cameraPitch - data.movementY * sensitivity));
+        this.cameraPitch = Math.max(-1.4, Math.min(1.4, this.cameraPitch - data.movementY * sensitivity));
         this.lastMouseManualTS = Date.now();
     }
   };
@@ -267,64 +260,27 @@ export class GameScreen extends Screen {
     this.intent.isFiringNormal = this.virtualFireNormal || inputManager.isActiveAction('FIRE') || (inputManager.isMouseDown() && !this.rightClickFire);
     this.intent.isFiringGrenade = this.virtualFireGrenade || this.rightClickFire || inputManager.isActiveAction('FIRE_ALT');
 
-    // --- WORLD SPACE AIMING ---
-    const camPos = this.camera.getPosition();
-    const cy = this.cameraYaw;
-    const cp = this.cameraPitch;
-    const camForward = [
-        -Math.sin(cy) * Math.cos(cp),
-        -Math.sin(cp),
-        -Math.cos(cy) * Math.cos(cp)
-    ] as vec3;
-
-    const rayEnd = [
-        camPos[0] + camForward[0] * 1000,
-        camPos[1] + camForward[1] * 1000,
-        camPos[2] + camForward[2] * 1000
+    const tankP = this.tank.physicsBody.body.GetPosition();
+    const playerPos: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
+    const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
+    const sideOffset = this.isSniperMode ? 0.8 : 1.5;
+    const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0, -1]);
+    const viewForward = rotQ.rotateVector([0, 0, -1]);
+    
+    const targetLook: vec3 = [
+        playerPos[0] + lookRight[0] + viewForward[0] * 100.0,
+        playerPos[1] + 1.2 + viewForward[1] * 100.0,
+        playerPos[2] + lookRight[2] + viewForward[2] * 100.0
     ];
 
-    const ray = gfx3JoltManager.createRay(camPos[0], camPos[1], camPos[2], rayEnd[0], rayEnd[1], rayEnd[2]);
-    let targetPoint: vec3;
-    
-    this.isTargetingEnemy = false;
-    if (ray.body && ray.fraction < 1.0) {
-        targetPoint = [
-            camPos[0] + (rayEnd[0] - camPos[0]) * ray.fraction,
-            camPos[1] + (rayEnd[1] - camPos[1]) * ray.fraction,
-            camPos[2] + (rayEnd[2] - camPos[2]) * ray.fraction
-        ];
-        
-        // Check if hitting enemy
-        const hitBodyId = ray.body.GetID().GetIndex();
-        for (const enemy of this.enemies) {
-            if (enemy.physicsBody && enemy.physicsBody.bodyId === hitBodyId) {
-                this.isTargetingEnemy = true;
-                break;
-            }
-        }
-    } else {
-        targetPoint = rayEnd;
-    }
+    const turretPos: vec3 = [playerPos[0], playerPos[1] + 0.9, playerPos[2]];
+    const dx = targetLook[0] - turretPos[0];
+    const dy = targetLook[1] - turretPos[1];
+    const dz = targetLook[2] - turretPos[2];
 
-    this.targetPoint = targetPoint;
-    this.targetDist = UT.VEC3_DISTANCE(camPos, targetPoint);
-
-    // Turret is at playerPos + [0, 0.9, 0] approx
-    const pos = this.tank.physicsCar.body.GetPosition();
-    const turretPivot: vec3 = [pos.GetX(), pos.GetY() + 0.9, pos.GetZ()];
-    
-    const dx = targetPoint[0] - turretPivot[0];
-    const dy = targetPoint[1] - turretPivot[1];
-    const dz = targetPoint[2] - turretPivot[2];
-    
-    const distXZ = Math.sqrt(dx * dx + dz * dz);
-    
-    this.intent.aimYaw = Math.atan2(dx, dz);
-    this.intent.aimPitch = Math.atan2(dy, distXZ);
-
-    // Reload Progress
-    this.reloadProgress = 1.0 - this.tank.shellRecoil;
-    this.grenadeReloadProgress = 1.0 - this.tank.grenadeRecoil;
+    this.intent.aimYaw = Math.atan2(-dx, -dz);
+    const dist2D = Math.sqrt(dx*dx + dz*dz);
+    this.intent.aimPitch = Math.atan2(dy, dist2D);
   }
 
   update(ts: number) {
@@ -339,24 +295,24 @@ export class GameScreen extends Screen {
         ts, 
         this.intent.moveDir, 
         this.intent.isFiringNormal, 
-        this.intent.isFiringGrenade,
-        this.intent.aimYaw,
+        this.intent.isFiringGrenade, 
+        this.intent.aimYaw, 
         this.intent.aimPitch
     );
     
     if (shots.normal) {
-       this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleQuat, 'player', 1.0, 35);
+       this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 35);
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.SHELL);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.08);
     }
     if (shots.grenade) {
-       this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleQuat, 'player', 1.0, 100);
+       this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 100);
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.GRENADE);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.18);
     }
 
-    const pos = this.tank.physicsCar.body.GetPosition();
-    const playerPos: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
+    const tankP = this.tank.physicsBody.body.GetPosition();
+    const playerPos: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
     
     // Update Enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -373,9 +329,9 @@ export class GameScreen extends Screen {
         }
 
         const res = enemy.update(ts, playerPos);
-        if (res.didShoot && res.muzzlePos && res.quat) {
+        if (res.didShoot && res.muzzlePos && res.dir) {
             const damage = enemy.type === EnemyType.HEAVY ? 50 : (enemy.type === EnemyType.SCOUT ? 15 : 25);
-            this.spawnProjectile(ProjectileType.SHELL, res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], res.quat, 'enemy', 1.0, damage);
+            this.spawnProjectile(ProjectileType.SHELL, res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], res.dir, 'enemy', 1.0, damage);
             const exp = this.explosionPool.acquire() as Explosion;
             if (exp) {
                 exp.reset(res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], [1.0, 0.5, 0.1], res.dir);
@@ -401,7 +357,7 @@ export class GameScreen extends Screen {
 
 
     // DYNAMIC CAMERA FOV & DISTANCE
-    const speedFactor = Math.min(1.0, Math.abs(this.tank.speed) / 20.0);
+    const speedFactor = Math.min(1.0, Math.abs(this.tank.speed) / 16.0);
     const targetFOV = 0.785 + (speedFactor * 0.15); // ~45deg + speed boost
     this.camera.setPerspectiveFovy(UT.LERP(this.camera.getPerspectiveFovy(), targetFOV, 1.0 - Math.exp(-2.0 * (ts/1000))));
 
@@ -409,27 +365,36 @@ export class GameScreen extends Screen {
     const finalTargetDist = (this.isSniperMode ? 6.0 : this.targetCameraDistance) + speedDistOffset;
     this.cameraDistance = UT.LERP(this.cameraDistance, finalTargetDist, 1.0 - Math.exp(-8.0 * (ts / 1000)));
 
-    // CENTERED CHASE CAMERA LOGIC
-    const cy = this.cameraYaw;
-    const cp = this.cameraPitch;
-    const camOffset = [
-        Math.sin(cy) * Math.cos(cp) * this.cameraDistance,
-        Math.sin(cp) * this.cameraDistance,
-        Math.cos(cy) * Math.cos(cp) * this.cameraDistance
-    ] as vec3;
-
-    const eyePosJolt = this.tank.physicsCar.body.GetPosition();
-    const targetHeightOffset = 1.5;
+    // OVER-THE-SHOULDER CAMERA LOGIC
+    // We use a dedicated shoulder offset and smoothed look-at system
+    const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
+    
+    // 1. Calculate the ideal eye position
+    // Base distance behind, but offset to the side for "Shoulder" feel
+    const sideOffset = this.isSniperMode ? 0.8 : 1.5;
+    const heightOffset = 2.2;
+    
+    // Local camera vectors
+    const viewBack = rotQ.rotateVector([0, 0, this.cameraDistance]);
+    const viewRight = rotQ.rotateVector([sideOffset, 0, 0]);
     
     const idealPos: vec3 = [
-        eyePosJolt.GetX() + camOffset[0],
-        eyePosJolt.GetY() + camOffset[1] + targetHeightOffset,
-        eyePosJolt.GetZ() + camOffset[2]
+        playerPos[0] + viewBack[0] + viewRight[0],
+        playerPos[1] + viewBack[1] + heightOffset,
+        playerPos[2] + viewBack[2] + viewRight[2]
     ];
     
-    // Position Smoothing (Chase LERP)
-    const camAlphaSpeed = 1.0 - Math.exp(-12.0 * (ts / 1000)); 
-    this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlphaSpeed);
+    // 2. Terrain clipping prevention (Floor floor)
+    // Scale height floor based on pitch to avoid cutting through slopes
+    const pitchFactor = Math.max(0, this.cameraPitch);
+    const minHeight = playerPos[1] + 1.2 + (pitchFactor * 1.5);
+    if (idealPos[1] < minHeight) {
+        idealPos[1] = minHeight;
+    }
+    
+    // 3. Position Smoothing (Chase LERP)
+    const camAlpha = 1.0 - Math.exp(-12.0 * (ts / 1000)); 
+    this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
     
     const shakeX = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeY = (Math.random() - 0.5) * this.shakeIntensity;
@@ -437,15 +402,17 @@ export class GameScreen extends Screen {
     
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     
-    // Update the Look-At Target
-    // Using a simpler centered target look-at
-    const desiredLookTarget: vec3 = [
-        eyePosJolt.GetX(),
-        eyePosJolt.GetY() + targetHeightOffset,
-        eyePosJolt.GetZ()
+    // 4. Update the Look-At Target
+    // Focus slightly to the side of the tank to maintain the shoulder composition
+    const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0,-1]);
+    const viewForward = rotQ.rotateVector([0, 0, -1]);
+    const targetLook: vec3 = [
+        playerPos[0] + lookRight[0] + viewForward[0] * 100.0,
+        playerPos[1] + 1.2 + viewForward[1] * 100.0,
+        playerPos[2] + lookRight[2] + viewForward[2] * 100.0
     ];
     
-    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, desiredLookTarget, 1.0 - Math.exp(-18.0 * (ts / 1000)));
+    this.cameraLookTarget = UT.VEC3_LERP(this.cameraLookTarget, targetLook, 1.0 - Math.exp(-18.0 * (ts / 1000)));
     this.camera.lookAt(this.cameraLookTarget[0] + shakeX, this.cameraLookTarget[1] + shakeY, this.cameraLookTarget[2] + shakeZ);
     
     this.shakeIntensity = UT.LERP(this.shakeIntensity, 0, 5.0 * (ts / 1000));
@@ -529,14 +496,13 @@ export class GameScreen extends Screen {
       }
     });
 
-    if (type === ProjectileType.SHELL || type === ProjectileType.GRENADE) {
-        // projecties should have gravity!
-        const gFactor = type === ProjectileType.GRENADE ? 2.2 : 1.0; 
-        gfx3JoltManager.bodyInterface.SetGravityFactor(pBody.body.GetID(), gFactor); 
+    if (type === ProjectileType.SHELL) {
+        // Real ballistic shells should have gravity! 
+        gfx3JoltManager.bodyInterface.SetGravityFactor(pBody.body.GetID(), 1.0); 
     }
 
-    let forwardSpeed = type === ProjectileType.GRENADE ? 45 : 180; // Reduced grenade speed
-    let upwardVel = type === ProjectileType.GRENADE ? 12 : 0; 
+    let forwardSpeed = type === ProjectileType.GRENADE ? 60 : 180; // Faster, consistent speed
+    let upwardVel = type === ProjectileType.GRENADE ? 20 : 0.5; // Flatter shell trajectory
     
     forwardSpeed *= speedMod;
 
@@ -564,8 +530,8 @@ export class GameScreen extends Screen {
   }
 
   updateProjectiles(ts: number) {
-    const pos = this.tank.physicsCar.body.GetPosition();
-    const playerPos3: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
+    const tankP = this.tank.physicsBody.body.GetPosition();
+    const playerPos3: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
 
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
@@ -603,7 +569,7 @@ export class GameScreen extends Screen {
               const ePos = enemy.physicsBody.body.GetPosition();
               const dist = UT.VEC3_DISTANCE(pPos3, [ePos.GetX(), ePos.GetY() + 0.3 * enemy.stats.scale, ePos.GetZ()]); 
               
-              const hitRange = 2.8 * enemy.stats.scale;
+              const hitRange = 4.5 * enemy.stats.scale;
               if (dist < hitRange) {
                   enemy.lastHitTime = Date.now();
                   this.onProjectileHit(p, enemy, pPos3);
@@ -613,8 +579,7 @@ export class GameScreen extends Screen {
           }
       } else {
           const distToPlayer = UT.VEC3_DISTANCE(pPos3, [playerPos3[0], playerPos3[1] + 0.5, playerPos3[2]]);
-          // Reduced radius to prevent self-collision (Muzzle is at 3.2m)
-          if (distToPlayer < 2.2) {
+          if (distToPlayer < 3.5) {
               this.onProjectileHit(p, this.tank, pPos3);
               destroyed = true;
           }
@@ -679,6 +644,7 @@ export class GameScreen extends Screen {
               exp.reset(hitPos[0], hitPos[1], hitPos[2], [1, 0.1, 0.1], undefined, 0.5);
               this.explosions.push(exp);
           }
+          this.tank.recoil = Math.max(this.tank.recoil, 0.5);
           this.shakeIntensity = Math.max(this.shakeIntensity, 0.2); 
       }
       
@@ -718,11 +684,12 @@ export class GameScreen extends Screen {
           }
       }
 
-      const pPos = this.tank.physicsCar.body.GetPosition();
-      const playerPos3: vec3 = [pPos.GetX(), pPos.GetY(), pPos.GetZ()];
+      const tankP = this.tank.physicsBody.body.GetPosition();
+      const playerPos3: vec3 = [tankP.GetX(), tankP.GetY(), tankP.GetZ()];
       const distToPlayer = UT.VEC3_DISTANCE(origin, playerPos3);
       if (distToPlayer < radius) {
           this.tank.hp -= damage;
+          this.tank.recoil = Math.max(this.tank.recoil, 1.0);
           this.shakeIntensity = Math.max(this.shakeIntensity, 0.35);
       }
   }

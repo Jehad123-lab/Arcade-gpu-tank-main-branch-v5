@@ -10,14 +10,10 @@ A log of all tasks, ideas, and progress for this project.
 
 ## In Progress
 
--   **[2026-05-19 08:34]**: Implementing `Car.ts` using `Gfx3JoltCar` to provide advanced vehicle physics and controls as seen in the car-jolt example. Integrating the car as the primary player vehicle in `GameScreen.ts`.
+-   ...
 
 ## Done
 
--   **[2026-05-18 11:40]**: Fixed Grenade trajectory issue. Reduced forward speed from 60 to 45 and upward velocity from 20 to 12. Increased gravity factor to 2.2 to create a heavier, more controlled lob that prevents the grenade from overshooting targets.
--   **[2026-05-18 11:29]**: Fixed dual inversion issues: Corrected Tank steering (D now correctly turns Right again after an accidental swap) and fixed muzzle pitch inversion (barrel now correctly aligns with camera pitch instead of looking down when the player looks up).
--   **[2026-05-18 11:23]**: Fixed steering inversion (A now turns Left, D turns Right) and resolved "Right/Left" movement glitches by ensuring velocity vectors are perfectly aligned with the hull's 3D orientation. Smoothed Enemy movement by reducing obstacle avoidance jitter and fine-tuning rotation interpolation.
--   **[2026-05-18 11:15]**: Overhauled Enemy design. Implemented type-specific high-fidelity meshes (Sleek Scouts, Heavy Juggernauts, Spike-turreted Elites). Adopted a "Hunter" aesthetic with dark achromatic bases and neon emissive accents (Orange, Purple, Red, Green). Added glowing sensor "eyes" to enhance threat visibility and personality.
 -   **[2026-05-18 11:09]**: Fixed reversed steering polarity (D now correctly turns Right, A turns Left) and verified input axis mapping to ensure W/S reliably drives the tank forward/backward relative to its current chassis orientation.
 -   **[2026-05-18 11:02]**: Implemented Classic Tank Controls. WASD now operates relative to the tank chassis (W/S for throttle, A/D for independent rotation), decoupling the hull's movement from the camera orientation while maintaining independent turret aiming.
 -   **[2026-05-18 10:55]**: Refactored tank movement into a "Pivot-First" system. Removed automatic reverse-driving logic to ensure the hull always faces the direction of travel (leading with the front), increased rotational authority, and added a steep speed penalty for misalignment to force the tank to position its body before accelerating.

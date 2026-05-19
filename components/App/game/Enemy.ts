@@ -9,8 +9,7 @@ import { createBoxMesh, createUnitBoxMesh } from './GameUtils';
 export enum EnemyType {
   STANDARD = 'standard',
   SCOUT = 'scout',
-  HEAVY = 'heavy',
-  ELITE = 'elite'
+  HEAVY = 'heavy'
 }
 
 export enum EnemyState {
@@ -29,63 +28,42 @@ interface EnemyStats {
   damage: number;
   chassisColor: [number, number, number];
   turretColor: [number, number, number];
-  accentColor: [number, number, number];
   scale: number;
-  barrelLength: number;
 }
 
 const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.STANDARD]: {
-    hp: 120,
-    maxHp: 120,
-    speed: 12,
-    rotSpeed: 1.2,
-    shootInterval: 2.2,
+    hp: 100,
+    maxHp: 100,
+    speed: 10,
+    rotSpeed: 1.0,
+    shootInterval: 2.5,
     damage: 35,
-    chassisColor: [0.15, 0.15, 0.15], // Dark Charcoal
-    turretColor: [0.2, 0.2, 0.2],
-    accentColor: [1.0, 0.4, 0.0], // Neon Orange
-    scale: 1.0,
-    barrelLength: 2.3
+    chassisColor: [0.45, 0.55, 0.35],
+    turretColor: [0.4, 0.5, 0.3],
+    scale: 1.0
   },
   [EnemyType.SCOUT]: {
-    hp: 60,
-    maxHp: 60,
-    speed: 22,
-    rotSpeed: 2.5,
-    shootInterval: 1.0,
+    hp: 50,
+    maxHp: 50,
+    speed: 18,
+    rotSpeed: 2.0,
+    shootInterval: 1.2,
     damage: 15,
-    chassisColor: [0.1, 0.1, 0.1],
-    turretColor: [0.15, 0.1, 0.2],
-    accentColor: [0.7, 0.2, 1.0], // Neon Purple
-    scale: 0.8,
-    barrelLength: 1.8
+    chassisColor: [0.3, 0.4, 0.6], // Blueish
+    turretColor: [0.25, 0.35, 0.55],
+    scale: 0.8
   },
   [EnemyType.HEAVY]: {
-    hp: 350,
-    maxHp: 350,
-    speed: 7,
-    rotSpeed: 0.6,
-    shootInterval: 3.5,
-    damage: 80,
-    chassisColor: [0.05, 0.05, 0.05],
-    turretColor: [0.1, 0.05, 0.05],
-    accentColor: [1.0, 0.0, 0.0], // Threat Red
-    scale: 1.5,
-    barrelLength: 2.8
-  },
-  [EnemyType.ELITE]: {
-    hp: 600,
-    maxHp: 600,
-    speed: 14,
-    rotSpeed: 1.5,
-    shootInterval: 0.8,
-    damage: 40,
-    chassisColor: [0.0, 0.0, 0.0],
-    turretColor: [0.1, 0.1, 0.1],
-    accentColor: [0.0, 1.0, 0.5], // Toxic Green
-    scale: 1.3,
-    barrelLength: 2.5
+    hp: 250,
+    maxHp: 250,
+    speed: 6,
+    rotSpeed: 0.5,
+    shootInterval: 4.0,
+    damage: 70,
+    chassisColor: [0.5, 0.3, 0.3], // Reddish
+    turretColor: [0.45, 0.25, 0.25],
+    scale: 1.4
   }
 };
 
@@ -94,46 +72,52 @@ const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
  * It uses static shared meshes for better performance across many instances.
  */
 export class Enemy {
-  static bodyMeshes: Record<string, Gfx3Mesh> = {};
-  static turretMeshes: Record<string, Gfx3Mesh> = {};
-  static barrelMeshes: Record<string, Gfx3Mesh> = {};
+  static bodyMesh: Gfx3Mesh;
+  static turretMesh: Gfx3Mesh;
+  static barrelMesh: Gfx3Mesh;
   static trackLMesh: Gfx3Mesh;
   static trackRMesh: Gfx3Mesh;
   static engineMesh: Gfx3Mesh;
   static hatchMesh: Gfx3Mesh;
   static antennaMesh: Gfx3Mesh;
-  static accentGlowMesh: Gfx3Mesh;
+  static projMesh: Gfx3Mesh;
+  static hpGreen: Gfx3Mesh;
+  static hpRed: Gfx3Mesh;
   static initialized = false;
 
+  /**
+   * Initializes shared meshes for all enemy instances.
+   */
   static async initMeshes() {
     if (Enemy.initialized) return;
     
-    // Create detailed parts
-    Enemy.trackLMesh = createBoxMesh(0.7, 1.0, 3.8, [0.05, 0.05, 0.05]);
-    Enemy.trackRMesh = createBoxMesh(0.7, 1.0, 3.8, [0.05, 0.05, 0.05]);
-    Enemy.engineMesh = createBoxMesh(1.8, 0.6, 1.0, [0.1, 0.1, 0.1]);
-    Enemy.hatchMesh = createBoxMesh(0.6, 0.15, 0.6, [0.1, 0.1, 0.1]);
-    Enemy.antennaMesh = createBoxMesh(0.05, 1.8, 0.05, [0.4, 0.4, 0.4]);
-    Enemy.accentGlowMesh = createBoxMesh(0.3, 0.3, 0.3, [1, 1, 1]);
+    const bodyJSM = new Gfx3MeshJSM();
+    const turretJSM = new Gfx3MeshJSM();
+    const barrelJSM = new Gfx3MeshJSM();
 
-    // Define unique chassis per type
-    const createChassis = (w: number, h: number, d: number) => createBoxMesh(w, h, d, [1, 1, 1]);
-    
-    Enemy.bodyMeshes[EnemyType.STANDARD] = createChassis(2.4, 0.9, 3.4);
-    Enemy.turretMeshes[EnemyType.STANDARD] = createBoxMesh(1.6, 0.7, 1.6, [1, 1, 1]);
-    Enemy.barrelMeshes[EnemyType.STANDARD] = createBoxMesh(0.3, 0.3, 2.3, [1, 1, 1]);
+    try {
+      await Promise.all([
+        bodyJSM.loadFromFile('models/tank_body.jsm'),
+        turretJSM.loadFromFile('models/tank_turret.jsm'),
+        barrelJSM.loadFromFile('models/tank_barrel.jsm')
+      ]);
 
-    Enemy.bodyMeshes[EnemyType.SCOUT] = createBoxMesh(1.8, 0.7, 2.8, [1, 1, 1]); // Sleeker
-    Enemy.turretMeshes[EnemyType.SCOUT] = createBoxMesh(1.2, 0.5, 1.2, [1, 1, 1]);
-    Enemy.barrelMeshes[EnemyType.SCOUT] = createBoxMesh(0.15, 0.15, 1.8, [1, 1, 1]);
+      Enemy.bodyMesh = bodyJSM;
+      Enemy.turretMesh = turretJSM;
+      Enemy.barrelMesh = barrelJSM;
+    } catch (e) {
+      console.warn('Enemy: Failed to load JSM models, falling back to boxes.', e);
+      Enemy.bodyMesh = createBoxMesh(2.25, 0.9, 3.3, [1, 1, 1]);
+      Enemy.turretMesh = createBoxMesh(1.65, 0.75, 1.65, [1, 1, 1]);
+      Enemy.barrelMesh = createBoxMesh(0.3, 0.3, 2.25, [1, 1, 1]);
+    }
 
-    Enemy.bodyMeshes[EnemyType.HEAVY] = createBoxMesh(3.2, 1.2, 4.2, [1, 1, 1]); // Massive
-    Enemy.turretMeshes[EnemyType.HEAVY] = createBoxMesh(2.2, 0.9, 2.2, [1, 1, 1]);
-    Enemy.barrelMeshes[EnemyType.HEAVY] = createBoxMesh(0.5, 0.5, 2.8, [1, 1, 1]);
-
-    Enemy.bodyMeshes[EnemyType.ELITE] = createBoxMesh(2.8, 1.0, 3.8, [1, 1, 1]); 
-    Enemy.turretMeshes[EnemyType.ELITE] = createBoxMesh(1.8, 0.8, 1.8, [1, 1, 1]);
-    Enemy.barrelMeshes[EnemyType.ELITE] = createBoxMesh(0.35, 0.35, 2.5, [1, 1, 1]);
+    Enemy.trackLMesh = createBoxMesh(0.6, 0.9, 3.6, [0.15, 0.15, 0.15]);
+    Enemy.trackRMesh = createBoxMesh(0.6, 0.9, 3.6, [0.15, 0.15, 0.15]);
+    Enemy.engineMesh = createBoxMesh(1.8, 0.6, 0.9, [0.2, 0.2, 0.2]);
+    Enemy.hatchMesh = createBoxMesh(0.6, 0.15, 0.6, [0.15, 0.15, 0.15]);
+    Enemy.antennaMesh = createBoxMesh(0.05, 1.5, 0.05, [0.1, 0.1, 0.1]);
+    Enemy.projMesh = createBoxMesh(0.6, 0.6, 0.6, [1.0, 0.2, 0.0]);
 
     Enemy.initialized = true;
   }
@@ -144,8 +128,6 @@ export class Enemy {
   stats: EnemyStats;
   
   rotation: number = 0;
-  turretYaw: number = 0;
-  barrelPitch: number = 0;
   velocity: number = 0;
   recoil: number = 0;
   shootCooldown: number = 0;
@@ -184,7 +166,7 @@ export class Enemy {
     this.rotation = Math.random() * Math.PI * 2;
   }
 
-  update(ts: number, playerPos: vec3): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3, quat?: Quaternion } {
+  update(ts: number, playerPos: vec3): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3 } {
     if (this.hp <= 0) return { didShoot: false };
 
     const dt = ts / 1000;
@@ -269,17 +251,16 @@ export class Enemy {
     const fLeft = qRot.rotateVector([-1.0, 0, -1.0]);
     const fRight = qRot.rotateVector([1.0, 0, -1.0]);
     
-    const rayDist = 12.0;
+    const rayDist = 15.0;
     const lRay = gfx3JoltManager.createRay(pos[0], castStartY, pos[2], pos[0] + fLeft[0] * rayDist, castStartY, pos[2] + fLeft[2] * rayDist);
     const rRay = gfx3JoltManager.createRay(pos[0], castStartY, pos[2], pos[0] + fRight[0] * rayDist, castStartY, pos[2] + fRight[2] * rayDist);
     
-    const lHit = lRay.fraction < 1.0 && lRay.fraction > 0.05;
-    const rHit = rRay.fraction < 1.0 && rRay.fraction > 0.05;
+    const lHit = lRay.fraction < 1.0 && lRay.fraction > 0.1;
+    const rHit = rRay.fraction < 1.0 && rRay.fraction > 0.1;
     
-    const avoidAngle = 0.45; // Reduced from 1.0 to avoid sudden snapping
-    if (lHit && !rHit) return currentTargetAngle + avoidAngle;
-    if (rHit && !lHit) return currentTargetAngle - avoidAngle;
-    if (lHit && rHit) return currentTargetAngle + (lRay.fraction < rRay.fraction ? avoidAngle * 1.5 : -avoidAngle * 1.5);
+    if (lHit && !rHit) return currentTargetAngle + 1.0;
+    if (rHit && !lHit) return currentTargetAngle - 1.0;
+    if (lHit && rHit) return currentTargetAngle + (lRay.fraction < rRay.fraction ? 1.5 : -1.5);
     
     return currentTargetAngle;
   }
@@ -294,36 +275,31 @@ export class Enemy {
     let yawDiff = ((targetAngle - this.rotation) % (Math.PI * 2) + (Math.PI * 2)) % (Math.PI * 2);
     if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
     
-    // Smoother rotation accumulation
-    const rotAlpha = 1.0 - Math.exp(-6.0 * dt);
-    this.rotation += yawDiff * rotAlpha;
+    this.rotation += Math.sign(yawDiff) * Math.min(Math.abs(yawDiff), this.stats.rotSpeed * dt);
     
     // Physics sync
     let physYawDiff = ((this.rotation - currentYaw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     if (physYawDiff > Math.PI) physYawDiff -= Math.PI * 2;
     
-    const targetAngVelY = physYawDiff * 12.0; 
+    const targetAngVelY = physYawDiff * 15.0; 
     const currentAngVel = this.physicsBody.body.GetAngularVelocity();
-    const newAngY = UT.LERP(currentAngVel.GetY(), targetAngVelY, 1.0 - Math.exp(-12.0 * dt));
+    const newAngY = UT.LERP(currentAngVel.GetY(), targetAngVelY, 1.0 - Math.exp(-15.0 * dt));
 
     const currentUpVec = currentQuat.rotateVector([0, 1, 0]);
-    const rightingStrength = 15.0;
-    const newAngX = currentAngVel.GetX() * 0.5 - currentUpVec[2] * rightingStrength;
-    const newAngZ = currentAngVel.GetZ() * 0.5 + currentUpVec[0] * rightingStrength;
+    const rightingStrength = 10.0;
+    const newAngX = currentAngVel.GetX() * 0.6 - currentUpVec[2] * rightingStrength;
+    const newAngZ = currentAngVel.GetZ() * 0.6 + currentUpVec[0] * rightingStrength;
 
     gfx3JoltManager.bodyInterface.SetAngularVelocity(this.physicsBody.body.GetID(), new Gfx3Jolt.Vec3(newAngX, newAngY, newAngZ));
 
     const targetVelocity = throttle * this.stats.speed;
-    this.velocity = UT.LERP(this.velocity, targetVelocity, 1.0 - Math.exp(-6.0 * dt));
+    this.velocity = UT.LERP(this.velocity, targetVelocity, 1.0 - Math.exp(-8.0 * dt));
 
     const forward = currentQuat.rotateVector([0, 0, -1]);
     const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
-    
-    // Mix in forward projection for slopes but keep gravity
-    const vY = (forward[1] * this.velocity) + (currentJoltVel.GetY() * 0.2); 
     gfx3JoltManager.bodyInterface.SetLinearVelocity(
         this.physicsBody.body.GetID(), 
-        new Gfx3Jolt.Vec3(forward[0] * this.velocity, vY, forward[2] * this.velocity)
+        new Gfx3Jolt.Vec3(forward[0] * this.velocity, currentJoltVel.GetY(), forward[2] * this.velocity)
     );
 
     // Visual tilt
@@ -333,74 +309,52 @@ export class Enemy {
     this.visualQuat = currentQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z);
   }
 
-  private updateCombat(ts: number, playerPos: vec3, targetAngle: number, dist: number): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3, quat?: Quaternion } {
+  private updateCombat(ts: number, playerPos: vec3, targetAngle: number, dist: number): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3 } {
     const dt = ts / 1000;
     const PI2 = Math.PI * 2;
     
-    // Turret aiming directly at player (compensating for chassis tilt)
+    // Turret aiming directly at player
     const pos = JOLT_RVEC3_TO_VEC3(this.physicsBody.body.GetPosition());
     const dx = playerPos[0] - pos[0];
-    const dy = playerPos[1] - (pos[1] + 0.85 * this.stats.scale);
     const dz = playerPos[2] - pos[2];
-    
-    const globalAimDir = UT.VEC3_NORMALIZE([dx, dy, dz]);
-    
-    // finalVisualQ equivalent from visualQuat
-    const invChassisQ = this.visualQuat.inverse();
-    const localAimDir = invChassisQ.rotateVector(globalAimDir);
+    const playerAngle = Math.atan2(-dx, -dz);
 
-    const targetLocalYaw = Math.atan2(localAimDir[0], -localAimDir[2]);
-    const targetLocalPitch = Math.asin(localAimDir[1]);
-
-    let turretYawDiff = ((targetLocalYaw - this.turretYaw) % PI2 + PI2) % PI2;
+    let turretYawDiff = ((playerAngle - this.turretYaw) % PI2 + PI2) % PI2;
     if (turretYawDiff > Math.PI) turretYawDiff -= Math.PI * 2;
     this.turretYaw += turretYawDiff * (1.0 - Math.exp(-6.0 * dt));
-
-    this.barrelPitch += (targetLocalPitch - this.barrelPitch) * (1.0 - Math.exp(-4.0 * dt));
 
     if (dist < 45 && Math.abs(turretYawDiff) < 0.2 && this.shootCooldown <= 0 && this.state !== EnemyState.IDLE) {
         const muzzleData = this.getMuzzleData(this.visualQuat);
         this.shootCooldown = this.stats.shootInterval * (0.8 + Math.random() * 0.4); 
         this.recoil = 1.0;
-        return { didShoot: true, muzzlePos: muzzleData.muzzlePos, dir: muzzleData.dir, quat: muzzleData.quat };
+        return { didShoot: true, muzzlePos: muzzleData.muzzlePos, dir: muzzleData.dir };
     }
     
     return { didShoot: false };
   }
 
-  getMuzzleData(q: Quaternion): { muzzlePos: vec3, dir: vec3, quat: Quaternion } {
+  getMuzzleData(q: Quaternion): { muzzlePos: vec3, dir: vec3 } {
     const pos = this.physicsBody.body.GetPosition();
     const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
     const bodyMatrix = UT.MAT4_TRANSFORM(origin, [0, 0, 0], [1, 1, 1], q);
     
-    const localYawQ = Quaternion.createFromEuler(-this.turretYaw, 0, 0, 'YXZ');
+    const currentForward = q.rotateVector([0, 0, -1]);
+    const currentYaw = Math.atan2(-currentForward[0], -currentForward[2]);
+    const localYaw = (this.turretYaw - currentYaw);
+    const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
 
     const s = this.stats.scale;
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
-    
-    // Correct Pivot: attach at turret, rotate pitch, then offset forward
-    const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
     const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
-    const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, 0));
-    const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
-    const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, (-this.stats.barrelLength * 0.5 * s) + visualRecoilValue));
+    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, (-1.2 * s) + visualRecoilValue));
     
-    // Move muzzle further out than the visual tip (tip is at -barrelLength*1.0)
-    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -this.stats.barrelLength * 1.5 * s, 1]);
-    const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, muzzleLocalPos);
-    
-    const muzzleWorldDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, new Float32Array([0, 0, -1, 0]));
+    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.125 * s, 1]);
+    const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelPivotMatrix, muzzleLocalPos);
+    const muzzleWorldDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelPivotMatrix, new Float32Array([0, 0, -1, 0]));
     const muzzleWorldDir = UT.VEC3_NORMALIZE([muzzleWorldDirVec4[0], muzzleWorldDirVec4[1], muzzleWorldDirVec4[2]]);
     
-    const barrelLocalQ = Quaternion.createFromEuler(-this.turretYaw, -this.barrelPitch, 0, 'YXZ');
-    const barrelQuat = this.visualQuat.mul(barrelLocalQ.w, barrelLocalQ.x, barrelLocalQ.y, barrelLocalQ.z);
-
-    return { 
-      muzzlePos: [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]] as vec3, 
-      dir: muzzleWorldDir,
-      quat: barrelQuat
-    };
+    return { muzzlePos: [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]] as vec3, dir: muzzleWorldDir };
   }
 
   draw(cameraYaw: number = 0) {
@@ -419,42 +373,33 @@ export class Enemy {
 
     const bodyMatrix = UT.MAT4_TRANSFORM(origin, ZERO, scale, finalVisualQ);
     
-    const bodyMesh = Enemy.bodyMeshes[this.type];
-    const turretMesh = Enemy.turretMeshes[this.type];
-    const barrelMesh = Enemy.barrelMeshes[this.type];
-
     // Tint meshes
-    bodyMesh.setTag(0, 1, this.stats.chassisColor[0], this.stats.chassisColor[1], this.stats.chassisColor[2]);
-    turretMesh.setTag(0, 1, this.stats.turretColor[0], this.stats.turretColor[1], this.stats.turretColor[2]);
-    Enemy.accentGlowMesh.setTag(0, 1, this.stats.accentColor[0], this.stats.accentColor[1], this.stats.accentColor[2]);
+    Enemy.bodyMesh.setTag(0, 1, this.stats.chassisColor[0], this.stats.chassisColor[1], this.stats.chassisColor[2]);
+    Enemy.turretMesh.setTag(0, 1, this.stats.turretColor[0], this.stats.turretColor[1], this.stats.turretColor[2]);
 
-    gfx3MeshRenderer.drawMesh(bodyMesh, bodyMatrix);
+    gfx3MeshRenderer.drawMesh(Enemy.bodyMesh, bodyMatrix);
 
     const syncRigid = (mesh: Gfx3Mesh, localPos: vec3) => {
         const localMatrix = UT.MAT4_TRANSFORM([localPos[0]*s, localPos[1]*s, localPos[2]*s], [0, 0, 0], scale, new Quaternion());
         gfx3MeshRenderer.drawMesh(mesh, UT.MAT4_MULTIPLY(bodyMatrix, localMatrix));
     };
 
-    syncRigid(Enemy.trackLMesh, [-1.55, -0.15, 0]);
-    syncRigid(Enemy.trackRMesh, [1.55, -0.15, 0]);
+    syncRigid(Enemy.trackLMesh, [-1.425, -0.15, 0]);
+    syncRigid(Enemy.trackRMesh, [1.425, -0.15, 0]);
     syncRigid(Enemy.engineMesh, [0, 0.3, 1.8]);
-    
-    // Glowing eyes/sensors
-    syncRigid(Enemy.accentGlowMesh, [0.6, 0.4, -1.6]);
-    syncRigid(Enemy.accentGlowMesh, [-0.6, 0.4, -1.6]);
 
-    const localYawQ = Quaternion.createFromEuler(-this.turretYaw, 0, 0, 'YXZ');
+    const currentForward = finalVisualQ.rotateVector([0, 0, -1]);
+    const currentYaw = Math.atan2(-currentForward[0], -currentForward[2]);
+    const localYaw = (this.turretYaw - currentYaw);
+    const localYawQ = Quaternion.createFromEuler(localYaw, 0, 0, 'YXZ');
 
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4()); 
-    gfx3MeshRenderer.drawMesh(turretMesh, turretMatrix);
+    gfx3MeshRenderer.drawMesh(Enemy.turretMesh, turretMatrix);
 
     const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
-    const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
-    const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, 0));
-    const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
-    const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, (-this.stats.barrelLength * 0.5 * s) + visualRecoilValue));
-    gfx3MeshRenderer.drawMesh(barrelMesh, barrelMatrix);
+    const barrelPivotMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, (-1.2 * s) + visualRecoilValue));
+    gfx3MeshRenderer.drawMesh(Enemy.barrelMesh, barrelPivotMatrix);
     
     const syncToTurret = (mesh: Gfx3Mesh, localPos: vec3) => {
         const localMatrix = UT.MAT4_TRANSLATE(localPos[0]*s, localPos[1]*s, localPos[2]*s);
@@ -463,8 +408,5 @@ export class Enemy {
 
     syncToTurret(Enemy.hatchMesh, [0, 0.45, 0.3]);
     syncToTurret(Enemy.antennaMesh, [-0.6, 1.125, 0.6]);
-    
-    // Turret sensor glow
-    syncToTurret(Enemy.accentGlowMesh, [0.4, 0.3, -0.8]);
   }
 }

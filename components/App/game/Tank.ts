@@ -192,8 +192,7 @@ export class Tank {
     syncRigid(this.engine, [0, 0.3, 1.8]); // Engine at the back
 
     // INDEPENDENT TURRET (Matches Camera Yaw)
-    // The tank rotation is consistent with world aimYaw.
-    // Correct local yaw is target world direction minus current world orientation.
+    // Both aimYaw and this.rotation are now CCW.
     this.turretYaw = aimYaw - this.rotation;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
@@ -202,9 +201,9 @@ export class Tank {
     this.turret.enableManualTransform(turretMatrix);
  
     // BARREL PITCH (Matches Camera Pitch)
-    // aimPitch increases when looking up. In our barrel rotation, positive pitch is looking down.
-    this.barrelPitch = -aimPitch; 
-    this.barrelPitch = Math.max(-1.0, Math.min(0.6, this.barrelPitch));
+    // Positive pitch is UP in our coordinate system now.
+    this.barrelPitch = aimPitch; 
+    this.barrelPitch = Math.max(-0.6, Math.min(1.0, this.barrelPitch));
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);

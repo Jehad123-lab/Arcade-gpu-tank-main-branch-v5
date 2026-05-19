@@ -192,9 +192,9 @@ export class Tank {
     syncRigid(this.engine, [0, 0.3, 1.8]); // Engine at the back
 
     // INDEPENDENT TURRET (Matches Camera Yaw)
-    // Both aimYaw and this.rotation are Clockwise in this coordinate system.
-    // Correct local yaw is the difference between world target and world body.
-    this.turretYaw = aimYaw - this.rotation + Math.PI;
+    // The tank rotation is consistent with world aimYaw.
+    // Correct local yaw is target world direction minus current world orientation.
+    this.turretYaw = aimYaw - this.rotation;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));

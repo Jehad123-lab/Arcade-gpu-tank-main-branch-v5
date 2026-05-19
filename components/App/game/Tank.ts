@@ -66,19 +66,20 @@ export class Tank {
       y: 5.0, 
       z: 0,
       size: [2.5, 0.8, 3.8],
-      mass: 4500, // Heavy tank
-      maxEngineTorque: 4000, 
+      mass: 6500, // Heavier tank for more stability
+      maxEngineTorque: 7000, 
+      clutchStrength: 15.0,
       wheelRadius: 0.5,
-      wheelWidth: 0.35,
+      wheelWidth: 0.4,
       wheelOffsetHorizontal: 1.45,
       wheelOffsetVertical: 0.3,
-      maxSteerAngle: 30, // Steerable like a car
+      maxSteerAngle: 30, 
       suspensionMaxLength: 0.4,
       suspensionMinLength: 0.1,
       fourWheelDrive: true,
-      airResistance: 0.15,
-      rollingResistance: 0.1,
-      friction: 1.8
+      airResistance: 0.4, // More damping to reduce sliding
+      rollingResistance: 0.25, 
+      friction: 2.2
     });
   }
 
@@ -132,23 +133,25 @@ export class Tank {
       this.recoil = 1.8; 
     }
 
-    this.shellRecoil -= (ts / 1000) * 4.5; 
-    if (this.shellRecoil < 0) this.shellRecoil = 0;
-    this.grenadeRecoil -= (ts / 1000) * 1.5;
-    if (this.grenadeRecoil < 0) this.grenadeRecoil = 0;
-    
+    this.shellRecoil = UT.LERP(this.shellRecoil, 0, 4.5 * (ts / 1000));
+    this.grenadeRecoil = UT.LERP(this.grenadeRecoil, 0, 1.5 * (ts / 1000));
+    this.recoil = UT.LERP(this.recoil, 0, 8.0 * (ts / 1000));
+
     // Physics State
     const pos = this.physicsCar.body.GetPosition();
     const rot = this.physicsCar.body.GetRotation();
     const q = new Quaternion(rot.GetW(), rot.GetX(), rot.GetY(), rot.GetZ());
-    const forward = q.rotateVector([0, 0, -1]);
+    
+    // Physics Forward is Z+
+    const forwardVec = q.rotateVector([0, 0, 1]); 
 
     // Speed for UI
     const vel = this.physicsCar.body.GetLinearVelocity();
     this.speed = Math.sqrt(vel.GetX()**2 + vel.GetZ()**2);
     
     // Current base rotation (yaw) for turret calculation
-    this.rotation = Math.atan2(forward[0], -forward[2]);
+    // Since physics is Z+ forward, we use atan2(x, z)
+    this.rotation = Math.atan2(forwardVec[0], forwardVec[2]);
 
     // --- SYNC VISUALS ---
     const visualOrigin: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
@@ -156,18 +159,21 @@ export class Tank {
     // RECOIL CALCULATION (Sharp kick)
     const bodyRecoilOffset = this.recoil * -0.25; 
     const finalVisualOrigin: vec3 = [
-        visualOrigin[0] + forward[0] * bodyRecoilOffset,
-        visualOrigin[1] - 0.45, // Adjust for center of mass and suspension
-        visualOrigin[2] + forward[2] * bodyRecoilOffset
+        visualOrigin[0] + forwardVec[0] * bodyRecoilOffset,
+        visualOrigin[1] - 0.45, 
+        visualOrigin[2] + forwardVec[2] * bodyRecoilOffset
     ];
 
-    const bodyMatrix = UT.MAT4_TRANSFORM(finalVisualOrigin, [0, 0, 0], [1, 1, 1], q);
-    this.recoil = UT.LERP(this.recoil, 0, 8.0 * (ts / 1000));
+    // Tank mesh is naturally facing Z- (from createBoxMesh faces).
+    // Physics car faces Z+.
+    // So we apply a 180 degree rotation to the visual body.
+    const visualRotation = q.mul(Quaternion.createFromEuler(0, Math.PI, 0, 'YXZ').w, 0, 1, 0);
+    const bodyMatrix = UT.MAT4_TRANSFORM(finalVisualOrigin, [0, 0, 0], [1, 1, 1], visualRotation);
     
     this.body.enableManualTransform(bodyMatrix);
 
     const syncRigid = (mesh: Gfx3Mesh, localPos: vec3) => {
-        const localMatrix = UT.MAT4_TRANSFORM(localPos, [0, 0, 0], [1, 1, 1], new Quaternion());
+        const localMatrix = UT.MAT4_TRANSLATE(localPos[0], localPos[1], localPos[2]);
         mesh.enableManualTransform(UT.MAT4_MULTIPLY(bodyMatrix, localMatrix));
     };
 
@@ -176,7 +182,10 @@ export class Tank {
     syncRigid(this.engine, [0, 0.3, 1.8]);
 
     // INDEPENDENT TURRET (Matches Camera Yaw)
-    this.turretYaw = aimYaw - this.rotation;
+    // The tank body is facing Z- relative to physics world.
+    // aimYaw is global. this.rotation is global yaw of physics Z+.
+    // So turret yaw relative to body should be:
+    this.turretYaw = aimYaw - this.rotation + Math.PI;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));
@@ -193,9 +202,6 @@ export class Tank {
     const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
     const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, -1.125 + barrelRecoilVis));
     this.barrel.enableManualTransform(barrelMatrix);
-    
-    this.shellRecoil = UT.LERP(this.shellRecoil, 0, 10.0 * (ts / 1000));
-    this.grenadeRecoil = UT.LERP(this.grenadeRecoil, 0, 10.0 * (ts / 1000));
     
     const syncToTurret = (mesh: Gfx3Mesh, localPos: vec3) => {
         const localMatrix = UT.MAT4_TRANSLATE(localPos[0], localPos[1], localPos[2]);

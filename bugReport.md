@@ -4,6 +4,8 @@ Tracking all issues, from critical bugs to minor suggestions.
 
 ## Critical (App Breaking)
 
+-   **[RESOLVED] MUZZLE INVERT**: Barrel pitch was being applied with a negative sign, causing vertical inversion. Fixed in `Tank.ts`.
+-   **[RESOLVED] CONTROL JANK**: Replaced classic tank controls with modern Camera-Relative "Smart" steering for better player intuition. 
 -   **[RESOLVED] PROJECTILE PHYSICS DESYNC**: Shells weren't passing rotation to Jolt. Visually rotated, physically axis-aligned. Fixed by passing Euler-to-Quat to `addBox`.
 -   **[RESOLVED] RECOIL CLIPPING**: Projectiles spawned at static offsets while barrel was recoiling, causing shells to spawn inside the turret. Fixed with dynamic muzzle offset.
 -   **[RESOLVED] ELASTIC BOUNCE BUG**: Shells didn't explode on walls because speed didn't drop (elastic collision). Fixed by checking vector direction changes.

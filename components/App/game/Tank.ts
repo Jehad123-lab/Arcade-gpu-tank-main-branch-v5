@@ -146,29 +146,42 @@ export class Tank {
     this.grenadeRecoil -= (ts / 1000) * 1.5;
     if (this.grenadeRecoil < 0) this.grenadeRecoil = 0;
     
-    // 1. TANK MOVEMENT LOGIC (Classic Tank Controls)
+    // 1. TANK MOVEMENT LOGIC (Camera-Relative Smart Controls)
     const TANK_MAX_SPEED = 18.0;
     const MAX_ROT_VEL = 3.5;
     
-    // W/S corresponds to moveDir.y (Throttle)
-    // A/D corresponds to moveDir.x (Steering)
-    const throttle = moveDir.y; 
-    const steer = -moveDir.x; // Flip steer to make D = Right turn
+    // Get camera-relative movement vectors
+    const camYawQ = Quaternion.createFromEuler(aimYaw, 0, 0, 'YXZ');
+    const camForward = camYawQ.rotateVector([0, 0, -1]);
+    const camRight = camYawQ.rotateVector([1, 0, 0]);
 
-    if (Math.abs(throttle) > 0.05 || Math.abs(steer) > 0.05) {
-        // Rotation (Independent of camera direction)
-        // High rotation speed at low speed, wider turns at high speed
-        const turnAuthority = 1.0 - (Math.abs(this.speed) / TANK_MAX_SPEED * 0.4);
-        const targetRotVel = steer * MAX_ROT_VEL * turnAuthority;
-        this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-10.0 * (ts / 1000)));
+    const moveVec = UT.VEC3_NORMALIZE([
+        camRight[0] * moveDir.x + camForward[0] * moveDir.y,
+        0,
+        camRight[2] * moveDir.x + camForward[2] * moveDir.y
+    ]);
 
-        // Throttle (Relative to current chassis orientation)
-        const targetSpeed = throttle * TANK_MAX_SPEED;
-        const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
-        const accelAlpha = isBraking ? 12.0 : 6.0; 
+    const inputLen = Math.sqrt(moveDir.x * moveDir.x + moveDir.y * moveDir.y);
+
+    if (inputLen > 0.1) {
+        const targetAngle = Math.atan2(-moveVec[0], -moveVec[2]);
+        let angleDiff = ((targetAngle - this.rotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+        if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+        // Choose forward or reverse movement
+        let moveMultiplier = 1.0;
+        if (Math.abs(angleDiff) > Math.PI * 0.6) {
+            angleDiff = UT.CLAMP_ANGLE(angleDiff + Math.PI);
+            moveMultiplier = -1.0;
+        }
+
+        const targetRotVel = UT.CLAMP(angleDiff * 8.0, -MAX_ROT_VEL, MAX_ROT_VEL);
+        this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-12.0 * (ts / 1000)));
+
+        const targetSpeed = inputLen * TANK_MAX_SPEED * moveMultiplier;
+        const accelAlpha = 8.0; 
         this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-accelAlpha * (ts / 1000)));
     } else {
-        // Braking and stopping rotation
         this.speed = UT.LERP(this.speed, 0, 1.0 - Math.exp(-6.0 * (ts / 1000)));
         this.rotVel = UT.LERP(this.rotVel, 0, 1.0 - Math.exp(-15.0 * (ts / 1000)));
     }
@@ -291,7 +304,7 @@ export class Tank {
     const targetPitch = Math.max(maxDepress, Math.min(maxElevate, aimPitch));
     this.barrelPitch = UT.LERP(this.barrelPitch, targetPitch, 4.0 * (ts / 1000));
     
-    const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
+    const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
     // Reduced recoil slide to prevent clipping out the back of the turret
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);

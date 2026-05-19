@@ -14,6 +14,7 @@ A log of all tasks, ideas, and progress for this project.
 
 ## Done
 
+-   **[2026-05-19 12:16]**: Final fix for "Muzzle Invert" and "Control Issue". Corrected inverted barrel pitch application in `Tank.ts` (removed negative sign on PitchQ). Overhauled movement logic to use Camera-Relative Smart Controls, fulfilling the legacy `bugReport.md` promise and improving 3rd person accessibility.
 -   **[2026-05-18 11:09]**: Fixed reversed steering polarity (D now correctly turns Right, A turns Left) and verified input axis mapping to ensure W/S reliably drives the tank forward/backward relative to its current chassis orientation.
 -   **[2026-05-18 11:02]**: Implemented Classic Tank Controls. WASD now operates relative to the tank chassis (W/S for throttle, A/D for independent rotation), decoupling the hull's movement from the camera orientation while maintaining independent turret aiming.
 -   **[2026-05-18 10:55]**: Refactored tank movement into a "Pivot-First" system. Removed automatic reverse-driving logic to ensure the hull always faces the direction of travel (leading with the front), increased rotational authority, and added a steep speed penalty for misalignment to force the tank to position its body before accelerating.

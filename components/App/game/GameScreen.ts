@@ -26,7 +26,6 @@ import {
     Crosshair
 } from 'phosphor-react';
 import { Tank } from './Tank';
-import { Car } from './Car';
 import { Environment } from './Environment';
 import { Enemy, EnemyType } from './Enemy';
 import { Explosion } from './Explosion';
@@ -61,7 +60,6 @@ export interface InputIntent {
 export class GameScreen extends Screen {
   camera: Gfx3Camera;
   tank: Tank;
-  car: Car;
   level: Environment;
   enemies: Enemy[] = [];
   explosions: Explosion[] = [];
@@ -103,7 +101,6 @@ export class GameScreen extends Screen {
     super();
     this.camera = new Gfx3Camera(0);
     this.tank = new Tank();
-    this.car = new Car();
     this.level = new Environment();
     this.enemies = [];
     
@@ -208,7 +205,7 @@ export class GameScreen extends Screen {
     this.cameraDistance = 15;
     this.camera.getView().setBgColor(0.53, 0.81, 0.92, 1.0); // Sky blue
     
-    const pos = this.car.physicsCar.body.GetPosition();
+    const pos = this.tank.physicsCar.body.GetPosition();
     this.cameraLookTarget = [pos.GetX(), pos.GetY() + 1.5, pos.GetZ()];
     
     // Spawn exactly 3 enemies
@@ -263,7 +260,7 @@ export class GameScreen extends Screen {
     this.intent.isFiringNormal = this.virtualFireNormal || inputManager.isActiveAction('FIRE') || (inputManager.isMouseDown() && !this.rightClickFire);
     this.intent.isFiringGrenade = this.virtualFireGrenade || this.rightClickFire || inputManager.isActiveAction('FIRE_ALT');
 
-    const pos = this.car.physicsCar.body.GetPosition();
+    const pos = this.tank.physicsCar.body.GetPosition();
     const playerPos: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
     const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
     const sideOffset = this.isSniperMode ? 0.8 : 1.5;
@@ -292,12 +289,14 @@ export class GameScreen extends Screen {
     this.updateIntent(ts);
     this.level.update(ts);
 
-    // Tank / Car visuals (MuZzle, etc.)
-    const shots = this.car.update(
+    // Tank visuals (MuZzle, etc.)
+    const shots = this.tank.update(
         ts, 
         this.intent.moveDir, 
         this.intent.isFiringNormal, 
-        this.intent.isFiringGrenade
+        this.intent.isFiringGrenade,
+        this.intent.aimYaw,
+        this.intent.aimPitch
     );
     
     if (shots.normal) {
@@ -311,7 +310,7 @@ export class GameScreen extends Screen {
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.18);
     }
 
-    const pos = this.car.physicsCar.body.GetPosition();
+    const pos = this.tank.physicsCar.body.GetPosition();
     const playerPos: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
     
     // Update Enemies
@@ -357,7 +356,7 @@ export class GameScreen extends Screen {
 
 
     // DYNAMIC CAMERA FOV & DISTANCE
-    const speedFactor = Math.min(1.0, Math.abs(this.car.speed) / 25.0);
+    const speedFactor = Math.min(1.0, Math.abs(this.tank.speed) / 20.0);
     const targetFOV = 0.785 + (speedFactor * 0.15); // ~45deg + speed boost
     this.camera.setPerspectiveFovy(UT.LERP(this.camera.getPerspectiveFovy(), targetFOV, 1.0 - Math.exp(-2.0 * (ts/1000))));
 
@@ -367,37 +366,36 @@ export class GameScreen extends Screen {
 
     // OVER-THE-SHOULDER CAMERA LOGIC
     // We use a dedicated shoulder offset and smoothed look-at system
-    const rotQ = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
+    const rotQForCam = Quaternion.createFromEuler(this.cameraYaw, this.cameraPitch, 0, 'YXZ');
     
     // 1. Calculate the ideal eye position
     // Base distance behind, but offset to the side for "Shoulder" feel
-    const sideOffset = this.isSniperMode ? 0.8 : 1.5;
-    const heightOffset = 2.2;
+    const sideOffsetIn = this.isSniperMode ? 0.8 : 1.5;
+    const heightOffsetIn = 2.2;
     
     // Local camera vectors
-    const viewBack = rotQ.rotateVector([0, 0, this.cameraDistance]);
-    const viewRight = rotQ.rotateVector([sideOffset, 0, 0]);
+    const viewBack = rotQForCam.rotateVector([0, 0, this.cameraDistance]);
+    const viewRight = rotQForCam.rotateVector([sideOffsetIn, 0, 0]);
     
-    const eyePos = this.car.physicsCar.body.GetPosition();
-    const eyePlayerPos: vec3 = [eyePos.GetX(), eyePos.GetY(), eyePos.GetZ()];
+    const eyePosJolt = this.tank.physicsCar.body.GetPosition();
+    const eyePlayerPosIn: vec3 = [eyePosJolt.GetX(), eyePosJolt.GetY(), eyePosJolt.GetZ()];
 
     const idealPos: vec3 = [
-        eyePlayerPos[0] + viewBack[0] + viewRight[0],
-        eyePlayerPos[1] + viewBack[1] + heightOffset,
-        eyePlayerPos[2] + viewBack[2] + viewRight[2]
+        eyePlayerPosIn[0] + viewBack[0] + viewRight[0],
+        eyePlayerPosIn[1] + viewBack[1] + heightOffsetIn,
+        eyePlayerPosIn[2] + viewBack[2] + viewRight[2]
     ];
     
     // 2. Terrain clipping prevention (Floor floor)
-    // Scale height floor based on pitch to avoid cutting through slopes
     const pitchFactor = Math.max(0, this.cameraPitch);
-    const minHeight = eyePlayerPos[1] + 1.2 + (pitchFactor * 1.5);
+    const minHeight = eyePlayerPosIn[1] + 1.2 + (pitchFactor * 1.5);
     if (idealPos[1] < minHeight) {
         idealPos[1] = minHeight;
     }
     
     // 3. Position Smoothing (Chase LERP)
-    const camAlpha = 1.0 - Math.exp(-12.0 * (ts / 1000)); 
-    this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlpha);
+    const camAlphaSpeed = 1.0 - Math.exp(-12.0 * (ts / 1000)); 
+    this.cameraPos = UT.VEC3_LERP(this.cameraPos, idealPos, camAlphaSpeed);
     
     const shakeX = (Math.random() - 0.5) * this.shakeIntensity;
     const shakeY = (Math.random() - 0.5) * this.shakeIntensity;
@@ -406,9 +404,8 @@ export class GameScreen extends Screen {
     this.camera.setPosition(this.cameraPos[0] + shakeX, this.cameraPos[1] + shakeY, this.cameraPos[2] + shakeZ);
     
     // 4. Update the Look-At Target
-    // Focus slightly to the side of the tank to maintain the shoulder composition
-    const lookRight = rotQ.rotateVector([sideOffset * 0.5, 0,-1]);
-    const viewForward = rotQ.rotateVector([0, 0, -1]);
+    const lookRight = rotQForCam.rotateVector([sideOffsetIn * 0.5, 0,-1]);
+    const viewForward = rotQForCam.rotateVector([0, 0, -1]);
     const targetLook: vec3 = [
         playerPos[0] + lookRight[0] + viewForward[0] * 100.0,
         playerPos[1] + 1.2 + viewForward[1] * 100.0,
@@ -436,7 +433,7 @@ export class GameScreen extends Screen {
 
     const camPos = this.camera.getPosition();
     this.level.draw(camPos);
-    this.car.draw();
+    this.tank.draw(this.cameraYaw);
     
     for (const enemy of this.enemies) {
         enemy.draw(this.cameraYaw);
@@ -534,7 +531,7 @@ export class GameScreen extends Screen {
   }
 
   updateProjectiles(ts: number) {
-    const pos = this.car.physicsCar.body.GetPosition();
+    const pos = this.tank.physicsCar.body.GetPosition();
     const playerPos3: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
 
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -642,7 +639,7 @@ export class GameScreen extends Screen {
               }
           }
       } else {
-          this.car.hp -= dmg;
+          this.tank.hp -= dmg;
           const exp = this.explosionPool.acquire() as Explosion;
           if (exp) {
               exp.reset(hitPos[0], hitPos[1], hitPos[2], [1, 0.1, 0.1], undefined, 0.5);
@@ -687,11 +684,11 @@ export class GameScreen extends Screen {
           }
       }
 
-      const pPos = this.car.physicsCar.body.GetPosition();
+      const pPos = this.tank.physicsCar.body.GetPosition();
       const playerPos3: vec3 = [pPos.GetX(), pPos.GetY(), pPos.GetZ()];
       const distToPlayer = UT.VEC3_DISTANCE(origin, playerPos3);
       if (distToPlayer < radius) {
-          this.car.hp -= damage;
+          this.tank.hp -= damage;
           this.shakeIntensity = Math.max(this.shakeIntensity, 0.35);
       }
   }

@@ -177,8 +177,8 @@ const App = () => {
             if (gameScreenRef.current) {
                 setEnemyCount(gameScreenRef.current.enemies.length);
                 setScore(gameScreenRef.current.score);
-                if (gameScreenRef.current.car) {
-                    setPlayerHp(gameScreenRef.current.car.hp);
+                if (gameScreenRef.current.tank) {
+                    setPlayerHp(gameScreenRef.current.tank.hp);
                 }
                 setIsZoomed(gameScreenRef.current.isSniperMode);
             }

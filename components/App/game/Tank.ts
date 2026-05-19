@@ -69,21 +69,21 @@ export class Tank {
       x: 0, 
       y: 5.0, 
       z: 0,
-      size: [2.5, 1.0, 3.8],
-      mass: 12000, 
-      maxEngineTorque: 120000, 
-      clutchStrength: 150.0,
-      wheelRadius: 0.5,
-      wheelWidth: 0.5,
-      wheelOffsetHorizontal: 1.5,
-      wheelOffsetVertical: 0.3,
-      maxSteerAngle: 35, 
-      suspensionMaxLength: 0.3,
+      size: [2.8, 1.2, 4.0],
+      mass: 30000, 
+      maxEngineTorque: 250000, 
+      clutchStrength: 200.0,
+      wheelRadius: 0.55,
+      wheelWidth: 0.6,
+      wheelOffsetHorizontal: 1.4,
+      wheelOffsetVertical: 0.4,
+      maxSteerAngle: 25, 
+      suspensionMaxLength: 0.25,
       suspensionMinLength: 0.1,
       fourWheelDrive: true,
-      airResistance: 0.2, 
-      rollingResistance: 0.2, 
-      friction: 8.0 
+      airResistance: 0.5, 
+      rollingResistance: 0.5, 
+      friction: 12.0 
     });
   }
 
@@ -158,8 +158,8 @@ export class Tank {
     this.rotation = Math.atan2(forwardVec[0], forwardVec[2]);
 
     // Stationary Turning Logic (Simulate Tracks)
-    if (Math.abs(moveDir.x) > 0.1 && this.speed < 4.0) {
-        const turnSpeed = 3.5 * -moveDir.x;
+    if (Math.abs(moveDir.x) > 0.1 && this.speed < 5.0) {
+        const turnSpeed = 2.5 * -moveDir.x;
         this.physicsCar.body.SetAngularVelocity(new Gfx3Jolt.Vec3(0, turnSpeed, 0));
     }
 
@@ -170,7 +170,7 @@ export class Tank {
     const bodyRecoilOffset = this.recoil * -0.25; 
     const finalVisualOrigin: vec3 = [
         visualOrigin[0] + forwardVec[0] * bodyRecoilOffset,
-        visualOrigin[1] - 0.55, // Center of mass offset
+        visualOrigin[1] - 0.45, // Adjusted for 30-ton weight and wheel offset
         visualOrigin[2] + forwardVec[2] * bodyRecoilOffset
     ];
 

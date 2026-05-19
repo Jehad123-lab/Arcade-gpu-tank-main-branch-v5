@@ -10,7 +10,7 @@ A log of all tasks, ideas, and progress for this project.
 
 ## In Progress
 
--   ...
+-   **[2026-05-19 08:34]**: Implementing `Car.ts` using `Gfx3JoltCar` to provide advanced vehicle physics and controls as seen in the car-jolt example. Integrating the car as the primary player vehicle in `GameScreen.ts`.
 
 ## Done
 

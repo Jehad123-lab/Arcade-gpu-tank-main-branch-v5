@@ -1,15 +1,15 @@
+import { gfx3JoltManager, JOLT_LAYER_MOVING, Gfx3Jolt } from '@lib/gfx3_jolt/gfx3_jolt_manager';
 import { Gfx3Mesh } from '@lib/gfx3_mesh/gfx3_mesh';
 import { Gfx3MeshJSM } from '@lib/gfx3_mesh/gfx3_mesh_jsm';
 import { gfx3MeshRenderer } from '@lib/gfx3_mesh/gfx3_mesh_renderer';
 import { Quaternion } from '@lib/core/quaternion';
 import { UT } from '@lib/core/utils';
 import { createBoxMesh, createUnitBoxMesh } from './GameUtils';
-import { TankController } from './TankController';
 
 /**
  * The Tank class represents the player-controlled vehicle.
  * It manages multiple mesh components (body, turret, barrel, etc.)
- * and integrates with TankController for Jolt Physics and MOVEMENT.
+ * and integrates with Jolt Physics for movement.
  */
 export class Tank {
   static hpGreen: Gfx3Mesh;
@@ -24,18 +24,40 @@ export class Tank {
   engine: Gfx3Mesh;
   hatch: Gfx3Mesh;
   antenna: Gfx3Mesh;
-  
-  controller: TankController;
-  
-  get physicsBody() {
-    return this.controller.physicsBody;
-  }
-  
+  physicsBody: any;
+  velocity: number = 0;
+  speed: number = 0;
+  rotVel: number = 0; // Rotational velocity
+  sens: number = 0;
+  newSens: number = 0;
+  wheelAngle: number = 0;
+  rotation: number = 0;
   shellRecoil: number = 0;
   grenadeRecoil: number = 0;
   turretYaw: number = 0;
   barrelPitch: number = 0;
+  chassisTilt: number = 0;
+  wasFiringInternal: boolean = false;
+  currentNormal: vec3 = [0, 1, 0];
   hp: number = 100;
+  recoil: number = 0;
+
+  options = {
+    accelerationSpeed: 30.0,
+    maxSpeed: 18.0,
+    minSpeed: 0.1,
+    boostAtStart: 1.0,
+    brakeFriction: 4.0,
+    engineBrakeFriction: 1.5,
+    steerSpeed: 1.5,
+    maxTurn: 0.6,
+    quickFactor: 3.0,
+    swiftnessMap: [
+      { mapBegin: 1.0, mapEnd: 1.0, valueMin: 0, valueMax: 10 },
+      { mapBegin: 1.0, mapEnd: 0.6, valueMin: 10, valueMax: 20 },
+      { mapBegin: 0.6, mapEnd: 0.4, valueMin: 20, valueMax: 40 }
+    ]
+  };
 
   static initHPMeshes() {
     if (Tank.hpInit) return;
@@ -51,6 +73,7 @@ export class Tank {
     const trackColor: [number, number, number] = [0.15, 0.15, 0.15];
     const engineColor: [number, number, number] = [0.2, 0.2, 0.2];
 
+    // Initial placeholders until JSM models load
     this.body = createBoxMesh(2.25, 0.9, 3.3, chassisColor);
     this.turret = createBoxMesh(1.65, 0.75, 1.65, turretColor);
     this.barrel = createBoxMesh(0.3, 0.3, 2.25, [0.2, 0.2, 0.2]);
@@ -60,7 +83,19 @@ export class Tank {
     this.hatch = createBoxMesh(0.6, 0.15, 0.6, [0.15, 0.15, 0.15]);
     this.antenna = createBoxMesh(0.05, 1.5, 0.05, [0.1, 0.1, 0.1]);
 
-    this.controller = new TankController();
+    this.physicsBody = gfx3JoltManager.addSphere({
+      radius: 1.5,
+      x: 0, y: 3.0, z: 0, // Spawn higher
+      motionType: Gfx3Jolt.EMotionType_Dynamic,
+      layer: JOLT_LAYER_MOVING,
+      settings: { 
+          mAngularDamping: 5.0, // More stable
+          mMassPropertiesOverride: 15000.0,
+          mFriction: 0.1, // Less friction since we set velocity manually
+      }
+    });
+
+    // Note: SetCenterOfMass and SetLinearDamping are broken/missing in this version of the library
   }
 
   /**
@@ -96,13 +131,13 @@ export class Tank {
     if (fireNormal && this.shellRecoil <= 0) {
       this.shellRecoil = 1.0;
       didShootNormal = true;
-      this.controller.addRecoil(1.0); 
+      this.recoil = 1.0; 
     }
 
     if (fireGrenade && this.grenadeRecoil <= 0) {
       this.grenadeRecoil = 1.0;
       didShootGrenade = true;
-      this.controller.addRecoil(1.8); 
+      this.recoil = 1.8; 
     }
 
     this.shellRecoil -= (ts / 1000) * 4.5; 
@@ -111,11 +146,177 @@ export class Tank {
     this.grenadeRecoil -= (ts / 1000) * 1.5;
     if (this.grenadeRecoil < 0) this.grenadeRecoil = 0;
     
-    // UPDATE TANK PHYSICS AND CHASSIS ORIENTATION
-    const physUpdate = this.controller.update(ts, moveDir);
+    // 1. TANK MOVEMENT LOGIC (Classic Tank Controls)
+    const TANK_MAX_SPEED = 18.0;
+    const MAX_ROT_VEL = 3.5;
+    
+    // W/S corresponds to moveDir.y (Throttle)
+    // A/D corresponds to moveDir.x (Steering)
+    const throttle = moveDir.y; 
+    let steer = -moveDir.x; // Fixed: Needs minus for D=Right turn (Negative Yaw)
+
+    // Reverse steering direction when backing up for intuitive control
+    if (this.speed < -0.1) {
+        steer = -steer;
+    }
+
+    if (Math.abs(throttle) > 0.05 || Math.abs(steer) > 0.05) {
+        // Rotation (Independent of camera direction)
+        // High rotation speed at low speed, wider turns at high speed
+        const turnAuthority = 1.0 - (Math.abs(this.speed) / TANK_MAX_SPEED * 0.4);
+        const targetRotVel = steer * MAX_ROT_VEL * turnAuthority;
+        this.rotVel = UT.LERP(this.rotVel, targetRotVel, 1.0 - Math.exp(-10.0 * (ts / 1000)));
+
+        // Throttle (Relative to current chassis orientation)
+        const targetSpeed = throttle * TANK_MAX_SPEED;
+        const isBraking = (targetSpeed > 0 && this.speed < -0.1) || (targetSpeed < 0 && this.speed > 0.1);
+        const accelAlpha = isBraking ? 12.0 : 6.0; 
+        this.speed = UT.LERP(this.speed, targetSpeed, 1.0 - Math.exp(-accelAlpha * (ts / 1000)));
+    } else {
+        // Braking and stopping rotation
+        this.speed = UT.LERP(this.speed, 0, 1.0 - Math.exp(-6.0 * (ts / 1000)));
+        this.rotVel = UT.LERP(this.rotVel, 0, 1.0 - Math.exp(-15.0 * (ts / 1000)));
+    }
+
+    this.rotation += this.rotVel * (ts / 1000);
+    this.rotation = UT.CLAMP_ANGLE(this.rotation);
+
+    // 2. JOLT PHYSICS SYNC
+    gfx3JoltManager.bodyInterface.ActivateBody(this.physicsBody.body.GetID());
+
+    const pos = this.physicsBody.body.GetPosition();
+    const yawQ = Quaternion.createFromEuler(this.rotation, 0, 0, 'YXZ');
+
+    const halfW = 1.6;
+    const halfD = 1.7;
+    const offsets = [
+        yawQ.rotateVector([halfW, 0, halfD]),
+        yawQ.rotateVector([-halfW, 0, halfD]),
+        yawQ.rotateVector([halfW, 0, -halfD]),
+        yawQ.rotateVector([-halfW, 0, -halfD])
+    ];
+
+    let hitCount = 0;
+    let minDistFromCenter = 999;
+    const rayLen = 4.0;
+    const rayUpOffset = 0.5;
+
+    const pts = offsets.map((offset) => {
+        const sx = pos.GetX() + offset[0];
+        const sy = pos.GetY() + rayUpOffset;
+        const sz = pos.GetZ() + offset[2];
+        const rayHit = gfx3JoltManager.createRay(sx, sy, sz, sx, sy - rayLen, sz);
+        
+        if (rayHit.body && rayHit.body.GetID().GetIndexAndSequenceNumber() !== this.physicsBody.body.GetID().GetIndexAndSequenceNumber() && rayHit.normal) {
+            hitCount++;
+            const distFromCenter = rayHit.fraction * rayLen - rayUpOffset;
+            if (distFromCenter < minDistFromCenter) minDistFromCenter = distFromCenter;
+            return [sx, sy - rayHit.fraction * rayLen, sz];
+        } else {
+            // Un-supported corner drops down
+            return [sx, sy - rayLen * 0.8, sz]; 
+        }
+    });
+
+    let groundNormal: vec3 = [0, 1, 0];
+    let isGrounded = false;
+
+    // Reconstruct plane normal from diagonals
+    // Diagonals: pts[0] to pts[3], and pts[1] to pts[2]
+    const d1 = [pts[3][0] - pts[0][0], pts[3][1] - pts[0][1], pts[3][2] - pts[0][2]];
+    const d2 = [pts[2][0] - pts[1][0], pts[2][1] - pts[1][1], pts[2][2] - pts[1][2]];
+    
+    let crossNormal: vec3 = [
+         d1[1]*d2[2] - d1[2]*d2[1],
+         d1[2]*d2[0] - d1[0]*d2[2],
+         d1[0]*d2[1] - d1[1]*d2[0]
+    ];
+    crossNormal = UT.VEC3_NORMALIZE(crossNormal);
+    if (crossNormal[1] < 0) {
+        crossNormal[0] = -crossNormal[0];
+        crossNormal[1] = -crossNormal[1];
+        crossNormal[2] = -crossNormal[2];
+    }
+    
+    const centerHit = gfx3JoltManager.createRay(pos.GetX(), pos.GetY() + rayUpOffset, pos.GetZ(), pos.GetX(), pos.GetY() - rayLen, pos.GetZ());
+    if (centerHit.body && centerHit.body.GetID().GetIndexAndSequenceNumber() !== this.physicsBody.body.GetID().GetIndexAndSequenceNumber() && centerHit.normal) {
+        hitCount++;
+        const centerDist = centerHit.fraction * rayLen - rayUpOffset;
+        if (centerDist < minDistFromCenter) minDistFromCenter = centerDist;
+    }
+
+    if (hitCount > 0) {
+        groundNormal = crossNormal;
+        if (minDistFromCenter < 1.8) isGrounded = true;
+    }
+
+    // Smoothly align the tank's UP to the ground normal
+    const normalAlpha = 1.0 - Math.exp(-8.0 * (ts / 1000));
+    this.currentNormal[0] = UT.LERP(this.currentNormal[0], groundNormal[0], normalAlpha);
+    this.currentNormal[1] = UT.LERP(this.currentNormal[1], groundNormal[1], normalAlpha);
+    this.currentNormal[2] = UT.LERP(this.currentNormal[2], groundNormal[2], normalAlpha);
+    this.currentNormal = UT.VEC3_NORMALIZE(this.currentNormal);
+
+    // Calculate the orientation from Yaw + Ground Normal
+    const upAlignmentQ = Quaternion.createFromBetweenVectors([0, 1, 0], this.currentNormal);
+    const targetQuat = upAlignmentQ.mul(yawQ.w, yawQ.x, yawQ.y, yawQ.z);
+    
+    const joltQuatSet = new Gfx3Jolt.Quat(targetQuat.x, targetQuat.y, targetQuat.z, targetQuat.w);
+    gfx3JoltManager.bodyInterface.SetRotation(this.physicsBody.body.GetID(), joltQuatSet, Gfx3Jolt.EActivation_Activate);
+
+    // Precise Velocity
+    const forward = targetQuat.rotateVector([0, 0, -1]);
+    const currentJoltVel = this.physicsBody.body.GetLinearVelocity();
+    
+    let newVelX = forward[0] * this.speed;
+    let newVelY = currentJoltVel.GetY(); // Trust Jolt for Y velocity
+    let newVelZ = forward[2] * this.speed;
+
+    // Optional: add a tiny bit of downforce only if we are moving fast, to prevent flying off small bumps
+    if (isGrounded && Math.abs(this.speed) > 5) {
+        newVelY -= 1.0; 
+    }
+
+    gfx3JoltManager.bodyInterface.SetLinearVelocity(
+        this.physicsBody.body.GetID(), 
+        new Gfx3Jolt.Vec3(newVelX, newVelY, newVelZ)
+    );
+    
+    // 3. CHASSIS TILT (Acceleration-based lurch)
+    // Disabled movement-based tilt per user request for a more stable platform
+    this.velocity = this.speed; 
+    this.chassisTilt = 0;
+    
+    // Add firing lurch (nose up when firing)
+    const firingLurch = this.recoil * 0.12; 
+    const finalTilt = Math.max(-0.25, Math.min(0.25, -firingLurch));
+
+    // Teleport if out of bounds
+    if (pos.GetY() < -20.0) {
+        const resetPos = new Gfx3Jolt.RVec3(0, 5.0, 0);
+        gfx3JoltManager.bodyInterface.SetPosition(this.physicsBody.body.GetID(), resetPos, Gfx3Jolt.EActivation_Activate);
+        gfx3JoltManager.bodyInterface.SetLinearVelocity(this.physicsBody.body.GetID(), new Gfx3Jolt.Vec3(0, 0, 0));
+        this.speed = 0;
+    }
 
     // --- SYNC VISUALS ---
-    const bodyMatrix = UT.MAT4_TRANSFORM(physUpdate.recoiledOrigin, [0, 0, 0], [1, 1, 1], physUpdate.finalVisualQ);
+    const origin: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
+
+    // RECOIL CALCULATION (Sharp kick, slow settle)
+    const bodyRecoilOffset = this.recoil * -0.25; 
+    const tiltQ = Quaternion.createFromEuler(0, finalTilt, 0, 'YXZ');
+    
+    // Final body orientation with tilt and lurch
+    const finalVisualQ = targetQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z);
+
+    const recoiledOrigin: vec3 = [
+        origin[0] + forward[0] * bodyRecoilOffset,
+        origin[1] - 1.0, // Compensate for the sphere radius (1.5) vs old box height (0.5)
+        origin[2] + forward[2] * bodyRecoilOffset
+    ];
+
+    const bodyMatrix = UT.MAT4_TRANSFORM(recoiledOrigin, [0, 0, 0], [1, 1, 1], finalVisualQ);
+    this.recoil = UT.LERP(this.recoil, 0, 8.0 * (ts / 1000)); // Smoother recovery
     
     this.body.enableManualTransform(bodyMatrix);
 
@@ -129,7 +330,8 @@ export class Tank {
     syncRigid(this.engine, [0, 0.3, 1.8]);
 
     // 3. INDEPENDENT TURRET (Matches Camera Yaw)
-    this.turretYaw = aimYaw - this.controller.rotation;
+    // We simply subtract the tank's base yaw so that when combined, the global yaw matches the camera.
+    this.turretYaw = aimYaw - this.rotation;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));
@@ -137,6 +339,7 @@ export class Tank {
     this.turret.enableManualTransform(turretMatrix);
  
     // BARREL PITCH (Matches Camera Pitch)
+    // "copy the camera rotation to the canon" & "invert rotation angle"
     this.barrelPitch = -aimPitch; 
     
     const maxDepress = -0.5; 
@@ -145,7 +348,9 @@ export class Tank {
     
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
+    // Reduced recoil slide to prevent clipping out the back of the turret
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);
+    // Correct Barrel Pivot: Align at the turret base, rotate, then translate along the new forward arc
     const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.08, 0));
     const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
     const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, -1.125 + barrelRecoilVis));
@@ -162,10 +367,13 @@ export class Tank {
     syncToTurret(this.hatch, [0, 0.45, 0.3]);
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
+    // Muzzle is at the end of the barrel mesh (which is length 2.25, centered, so tip is at -1.125)
+    // We add a tiny offset to avoid self-collision/z-fighting with flash effects
     const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.15, 1]);
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, muzzleLocalPos);
     const muzzleWorldPos: vec3 = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
     
+    // Use a point further along the same vector to calculate world direction accurately
     const tipLocalPos: vec4 = new Float32Array([0, 0, -2.0, 1]);
     const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, tipLocalPos);
     const tipWorldPos: vec3 = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
@@ -206,10 +414,13 @@ export class Tank {
       const barHeight = 0.2;
       const barDepth = 0.2;
       
+      // Calculate scale and position to shrink towards the left
       const scaleX = barWidth * hpPercentage;
       
+      // Billboarding: Rotate healthbar to face camera yaw
       const barRotation = Quaternion.createFromEuler(cameraYaw, 0, 0, 'YXZ');
       
+      // Calculate offset in billboard space so it shrinks correctly
       const offsetLocal = [-(barWidth - scaleX) / 2, 0, 0] as vec3;
       const offsetWorld = barRotation.rotateVector(offsetLocal);
       
@@ -223,4 +434,3 @@ export class Tank {
       gfx3MeshRenderer.drawMesh(barMesh, matBar);
   }
 }
-

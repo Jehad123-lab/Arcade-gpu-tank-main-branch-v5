@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Crosshair
 } from 'phosphor-react';
-import { GameScreen, globalErrorDebug } from './game/GameScreen';
+import { GameScreen } from './game/GameScreen';
 
 // --- DESIGN TOKENS ---
 const Tokens = {
@@ -100,11 +100,10 @@ const Joystick = ({ onChange }: { onChange: (dir: { x: number, y: number }) => v
         let dx = e.clientX - centerX;
         let dy = e.clientY - centerY;
         const maxDist = rect.width / 2;
-        if (maxDist <= 0) return;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > maxDist) { dx *= maxDist / dist; dy *= maxDist / dist; }
         setPos({ x: dx, y: dy });
-        onChange({ x: dx / maxDist || 0, y: dy / maxDist || 0 });
+        onChange({ x: dx / maxDist, y: dy / maxDist });
     };
 
     return (
@@ -147,13 +146,6 @@ const Joystick = ({ onChange }: { onChange: (dir: { x: number, y: number }) => v
 // --- MAIN APP ---
 
 const App = () => {
-    const [debugLog, setDebugLog] = useState("");
-    useEffect(() => {
-        const interval = setInterval(() => {
-             if (globalErrorDebug !== debugLog) setDebugLog(globalErrorDebug);
-        }, 500);
-        return () => clearInterval(interval);
-    }, [debugLog]);
     const [isReady, setIsReady] = useState(false);
     const [enemyCount, setEnemyCount] = useState(0);
     const [playerHp, setPlayerHp] = useState(100);
@@ -185,8 +177,8 @@ const App = () => {
             if (gameScreenRef.current) {
                 setEnemyCount(gameScreenRef.current.enemies.length);
                 setScore(gameScreenRef.current.score);
-                if (gameScreenRef.current.tank) {
-                    setPlayerHp(gameScreenRef.current.tank.hp);
+                if (gameScreenRef.current.car) {
+                    setPlayerHp(gameScreenRef.current.car.hp);
                 }
                 setIsZoomed(gameScreenRef.current.isSniperMode);
             }
@@ -421,7 +413,7 @@ const App = () => {
                 <div style={{ pointerEvents: 'auto' }}>
                     {isMobile && <Joystick onChange={(dir) => {
                          if (gameScreenRef.current) {
-                            gameScreenRef.current.moveDirInput = { x: dir.x, y: -dir.y };
+                            gameScreenRef.current.virtualMoveDir = { x: dir.x, y: -dir.y };
                          }
                     }} />}
                 </div>
@@ -437,7 +429,6 @@ const App = () => {
                 color: Tokens.colors.contentDim,
                 letterSpacing: '1px'
             }}>
-                {debugLog && <div style={{color: 'red', background: 'black', padding: '4px'}}>{debugLog}</div>}
             </div>
 
             {/* GLOBAL STYLES FIX FOR CANVAS */}

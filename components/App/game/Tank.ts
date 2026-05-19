@@ -193,8 +193,9 @@ export class Tank {
 
     // INDEPENDENT TURRET (Matches Camera Yaw)
     // The tank physics front is Z+.
-    // Camera aimYaw (relative to Z-) matches the body at PI offset.
-    this.turretYaw = aimYaw - this.rotation + Math.PI;
+    // Camera aimYaw (relative to Z-) and this.rotation (relative to Z+) have mismatched signs/references.
+    // Correct formula to keep turret tracked to world aimYaw:
+    this.turretYaw = aimYaw + this.rotation - Math.PI;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.72, 0));

@@ -349,7 +349,7 @@ export class Enemy {
     const invChassisQ = this.visualQuat.inverse();
     const localAimDir = invChassisQ.rotateVector(globalAimDir);
 
-    const targetLocalYaw = Math.atan2(-localAimDir[0], -localAimDir[2]);
+    const targetLocalYaw = Math.atan2(localAimDir[0], -localAimDir[2]);
     const targetLocalPitch = Math.asin(localAimDir[1]);
 
     let turretYawDiff = ((targetLocalYaw - this.turretYaw) % PI2 + PI2) % PI2;
@@ -373,14 +373,14 @@ export class Enemy {
     const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
     const bodyMatrix = UT.MAT4_TRANSFORM(origin, [0, 0, 0], [1, 1, 1], q);
     
-    const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
+    const localYawQ = Quaternion.createFromEuler(-this.turretYaw, 0, 0, 'YXZ');
 
     const s = this.stats.scale;
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4());
     
     // Correct Pivot: attach at turret, rotate pitch, then offset forward
-    const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
+    const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
     const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
     const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, 0));
     const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
@@ -395,7 +395,8 @@ export class Enemy {
     
     // Calculate world orientation of the barrel.
     // Combinatory approach: Enemy Body Orientation * Turret Yaw * Barrel Pitch
-    const barrelLocalQ = Quaternion.createFromEuler(this.turretYaw, this.stats.barrelPitch, 0, 'YXZ');
+    // We negate yaw/pitch because our tracking variables are CW, but createFromEuler is CCW.
+    const barrelLocalQ = Quaternion.createFromEuler(-this.turretYaw, -this.barrelPitch, 0, 'YXZ');
     const barrelQuat = this.visualQuat.mul(barrelLocalQ.w, barrelLocalQ.x, barrelLocalQ.y, barrelLocalQ.z);
 
     return { 
@@ -445,14 +446,14 @@ export class Enemy {
     syncRigid(Enemy.accentGlowMesh, [0.6, 0.4, -1.6]);
     syncRigid(Enemy.accentGlowMesh, [-0.6, 0.4, -1.6]);
 
-    const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
+    const localYawQ = Quaternion.createFromEuler(-this.turretYaw, 0, 0, 'YXZ');
 
     const turretPivotMatrix = UT.MAT4_MULTIPLY(bodyMatrix, UT.MAT4_TRANSLATE(0, 0.85 * s, 0));
     const turretMatrix = UT.MAT4_MULTIPLY(turretPivotMatrix, localYawQ.toMatrix4()); 
     gfx3MeshRenderer.drawMesh(turretMesh, turretMatrix);
 
     const visualRecoilValue = this.recoil > 0 ? this.recoil * 0.45 : 0;
-    const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
+    const pitchQ = Quaternion.createFromEuler(0, -this.barrelPitch, 0, 'YXZ');
     const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.1 * s, 0));
     const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
     const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, (-this.stats.barrelLength * 0.5 * s) + visualRecoilValue));

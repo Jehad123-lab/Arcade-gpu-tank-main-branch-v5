@@ -300,12 +300,12 @@ export class GameScreen extends Screen {
     );
     
     if (shots.normal) {
-       this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 1.0, 35);
+       this.spawnProjectile(ProjectileType.SHELL, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleQuat, 'player', 1.0, 35);
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.SHELL);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.08);
     }
     if (shots.grenade) {
-       this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleDir, 'player', 1.0, 100);
+       this.spawnProjectile(ProjectileType.GRENADE, shots.muzzlePos[0], shots.muzzlePos[1], shots.muzzlePos[2], shots.muzzleQuat, 'player', 1.0, 100);
        this.handleTankMuzzleFlash(shots.muzzlePos, shots.muzzleDir, ProjectileType.GRENADE);
        this.shakeIntensity = Math.max(this.shakeIntensity, 0.18);
     }
@@ -328,9 +328,9 @@ export class GameScreen extends Screen {
         }
 
         const res = enemy.update(ts, playerPos);
-        if (res.didShoot && res.muzzlePos && res.dir) {
+        if (res.didShoot && res.muzzlePos && res.quat) {
             const damage = enemy.type === EnemyType.HEAVY ? 50 : (enemy.type === EnemyType.SCOUT ? 15 : 25);
-            this.spawnProjectile(ProjectileType.SHELL, res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], res.dir, 'enemy', 1.0, damage);
+            this.spawnProjectile(ProjectileType.SHELL, res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], res.quat, 'enemy', 1.0, damage);
             const exp = this.explosionPool.acquire() as Explosion;
             if (exp) {
                 exp.reset(res.muzzlePos[0], res.muzzlePos[1], res.muzzlePos[2], [1.0, 0.5, 0.1], res.dir);
@@ -503,7 +503,7 @@ export class GameScreen extends Screen {
     }
 
     let forwardSpeed = type === ProjectileType.GRENADE ? 45 : 180; // Reduced grenade speed
-    let upwardVel = type === ProjectileType.GRENADE ? 12 : 0.5; // Reduced grenade lob height
+    let upwardVel = type === ProjectileType.GRENADE ? 12 : 0; 
     
     forwardSpeed *= speedMod;
 

@@ -113,7 +113,7 @@ export class Tank {
   /**
    * Updates physics and syncs mesh transforms.
    */
-  update(ts: number, moveDir: { x: number, y: number }, fireNormal: boolean, fireGrenade: boolean, aimYaw: number = 0, aimPitch: number = 0): { normal: boolean, grenade: boolean, muzzlePos: vec3, muzzleDir: vec3 } {
+  update(ts: number, moveDir: { x: number, y: number }, fireNormal: boolean, fireGrenade: boolean, aimYaw: number = 0, aimPitch: number = 0): { normal: boolean, grenade: boolean, muzzlePos: vec3, muzzleDir: vec3, muzzleQuat: Quaternion } {
     let didShootNormal = false;
     let didShootGrenade = false;
 
@@ -202,7 +202,7 @@ export class Tank {
     this.turret.enableManualTransform(turretMatrix);
  
     // BARREL PITCH (Matches Camera Pitch)
-    this.barrelPitch = -aimPitch; 
+    this.barrelPitch = aimPitch; 
     this.barrelPitch = Math.max(-0.5, Math.min(1.0, this.barrelPitch));
     const pitchQ = Quaternion.createFromEuler(0, this.barrelPitch, 0, 'YXZ');
 
@@ -222,10 +222,17 @@ export class Tank {
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
     // Muzzle Logic (Barrel points at Z-)
-    const muzzleRelPos: vec4 = new Float32Array([0, 0, -3.8, 1]); 
+    // Explicitly moving it 5.0m away from the pivot, well past the 2.25m barrel.
+    const muzzleRelPos: vec4 = new Float32Array([0, 0, -5.0, 1]); 
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, muzzleRelPos);
     this.muzzlePos = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
     
+    const m = barrelRotMatrix;
+    const barrelWorldQ = Quaternion.createFromMatrix([
+        m[0], m[1], m[2],
+        m[4], m[5], m[6],
+        m[8], m[9], m[10]
+    ]);
     const muzzleDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, new Float32Array([0, 0, -1, 0]));
     this.muzzleDir = UT.VEC3_NORMALIZE([muzzleDirVec4[0], muzzleDirVec4[1], muzzleDirVec4[2]]);
 
@@ -240,7 +247,8 @@ export class Tank {
       normal: didShootNormal, 
       grenade: didShootGrenade,
       muzzlePos: this.muzzlePos,
-      muzzleDir: this.muzzleDir
+      muzzleDir: this.muzzleDir,
+      muzzleQuat: barrelWorldQ
     };
   }
   

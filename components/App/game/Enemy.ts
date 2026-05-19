@@ -184,7 +184,7 @@ export class Enemy {
     this.rotation = Math.random() * Math.PI * 2;
   }
 
-  update(ts: number, playerPos: vec3): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3 } {
+  update(ts: number, playerPos: vec3): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3, quat?: Quaternion } {
     if (this.hp <= 0) return { didShoot: false };
 
     const dt = ts / 1000;
@@ -333,7 +333,7 @@ export class Enemy {
     this.visualQuat = currentQuat.mul(tiltQ.w, tiltQ.x, tiltQ.y, tiltQ.z);
   }
 
-  private updateCombat(ts: number, playerPos: vec3, targetAngle: number, dist: number): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3 } {
+  private updateCombat(ts: number, playerPos: vec3, targetAngle: number, dist: number): { didShoot: boolean, muzzlePos?: vec3, dir?: vec3, quat?: Quaternion } {
     const dt = ts / 1000;
     const PI2 = Math.PI * 2;
     
@@ -362,13 +362,13 @@ export class Enemy {
         const muzzleData = this.getMuzzleData(this.visualQuat);
         this.shootCooldown = this.stats.shootInterval * (0.8 + Math.random() * 0.4); 
         this.recoil = 1.0;
-        return { didShoot: true, muzzlePos: muzzleData.muzzlePos, dir: muzzleData.dir };
+        return { didShoot: true, muzzlePos: muzzleData.muzzlePos, dir: muzzleData.dir, quat: muzzleData.quat };
     }
     
     return { didShoot: false };
   }
 
-  getMuzzleData(q: Quaternion): { muzzlePos: vec3, dir: vec3 } {
+  getMuzzleData(q: Quaternion): { muzzlePos: vec3, dir: vec3, quat: Quaternion } {
     const pos = this.physicsBody.body.GetPosition();
     const origin: vec3 = [pos.GetX(), pos.GetY() - 0.15, pos.GetZ()];
     const bodyMatrix = UT.MAT4_TRANSFORM(origin, [0, 0, 0], [1, 1, 1], q);
@@ -386,20 +386,25 @@ export class Enemy {
     const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
     const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, (-this.stats.barrelLength * 0.5 * s) + visualRecoilValue));
     
-    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -this.stats.barrelLength * 0.5 * s, 1]);
-    const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, muzzleLocalPos);
+    // Move muzzle further out than the visual tip (tip is at -barrelLength*1.0)
+    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -this.stats.barrelLength * 1.5 * s, 1]);
+    const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, muzzleLocalPos);
     
-    // Calculate direction using a point further out for precision
-    const tipLocalPos: vec4 = new Float32Array([0, 0, -this.stats.barrelLength * 1.0 * s, 1]);
-    const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, tipLocalPos);
+    const muzzleWorldDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, new Float32Array([0, 0, -1, 0]));
+    const muzzleWorldDir = UT.VEC3_NORMALIZE([muzzleWorldDirVec4[0], muzzleWorldDirVec4[1], muzzleWorldDirVec4[2]]);
     
-    const muzzleWorldDir = UT.VEC3_NORMALIZE([
-        tipWorldPosVec4[0] - muzzleWorldPosVec4[0],
-        tipWorldPosVec4[1] - muzzleWorldPosVec4[1],
-        tipWorldPosVec4[2] - muzzleWorldPosVec4[2]
+    const m = barrelRotMatrix;
+    const barrelQuat = Quaternion.createFromMatrix([
+        m[0], m[1], m[2],
+        m[4], m[5], m[6],
+        m[8], m[9], m[10]
     ]);
-    
-    return { muzzlePos: [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]] as vec3, dir: muzzleWorldDir };
+
+    return { 
+      muzzlePos: [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]] as vec3, 
+      dir: muzzleWorldDir,
+      quat: barrelQuat
+    };
   }
 
   draw(cameraYaw: number = 0) {

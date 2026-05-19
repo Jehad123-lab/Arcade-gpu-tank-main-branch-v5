@@ -200,7 +200,7 @@ export class GameScreen extends Screen {
 
     this.camera.setPosition(0, 12, 20); // Start at cy=0 position offset (0, 12, distance)
     this.camera.lookAt(0, 0, 0);
-    this.cameraYaw = 0; // aimYaw
+    this.cameraYaw = Math.PI; // Initialize facing Z+ (Tank Front)
     this.cameraPitch = 0.5; // aimPitch
     this.cameraDistance = 15;
     this.camera.getView().setBgColor(0.53, 0.81, 0.92, 1.0); // Sky blue

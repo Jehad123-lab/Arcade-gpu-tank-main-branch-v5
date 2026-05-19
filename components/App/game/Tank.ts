@@ -35,6 +35,9 @@ export class Tank {
   barrelPitch: number = 0;
   hp: number = 100;
   recoil: number = 0;
+  muzzlePos: vec3 = [0, 0, 0];
+  muzzleDir: vec3 = [0, 0, -1];
+  tipPos: vec3 = [0, 0, 0];
 
   static initHPMeshes() {
     if (Tank.hpInit) return;
@@ -51,6 +54,7 @@ export class Tank {
     const engineColor: [number, number, number] = [0.2, 0.2, 0.2];
 
     // Initial placeholders until JSM models load
+    // Orientation: Z+ is Front, X+ is Right.
     this.body = createBoxMesh(2.25, 0.9, 3.3, chassisColor);
     this.turret = createBoxMesh(1.65, 0.75, 1.65, turretColor);
     this.barrel = createBoxMesh(0.3, 0.3, 2.25, [0.2, 0.2, 0.2]);
@@ -65,21 +69,21 @@ export class Tank {
       x: 0, 
       y: 5.0, 
       z: 0,
-      size: [2.5, 0.8, 3.8],
-      mass: 6500, // Heavier tank for more stability
-      maxEngineTorque: 7000, 
-      clutchStrength: 15.0,
+      size: [2.5, 1.0, 3.8],
+      mass: 8000, // Heavy tank, very stable
+      maxEngineTorque: 9000, 
+      clutchStrength: 20.0,
       wheelRadius: 0.5,
-      wheelWidth: 0.4,
-      wheelOffsetHorizontal: 1.45,
+      wheelWidth: 0.5,
+      wheelOffsetHorizontal: 1.5, // Length offset
       wheelOffsetVertical: 0.3,
-      maxSteerAngle: 30, 
-      suspensionMaxLength: 0.4,
+      maxSteerAngle: 45, 
+      suspensionMaxLength: 0.3,
       suspensionMinLength: 0.1,
       fourWheelDrive: true,
-      airResistance: 0.4, // More damping to reduce sliding
-      rollingResistance: 0.25, 
-      friction: 2.2
+      airResistance: 1.2, // High damping to prevent sliding
+      rollingResistance: 0.5, 
+      friction: 4.0 // High ground friction for tracks
     });
   }
 
@@ -148,10 +152,18 @@ export class Tank {
     // Speed for UI
     const vel = this.physicsCar.body.GetLinearVelocity();
     this.speed = Math.sqrt(vel.GetX()**2 + vel.GetZ()**2);
-    
+
     // Current base rotation (yaw) for turret calculation
     // Since physics is Z+ forward, we use atan2(x, z)
     this.rotation = Math.atan2(forwardVec[0], forwardVec[2]);
+
+    // Stationary Turning Logic (Simulate Tracks)
+    const angularVel = this.physicsCar.body.GetAngularVelocity();
+    if (Math.abs(moveDir.x) > 0.1 && this.speed < 1.0) {
+        // Force rotation when nearly stationary
+        const turnSpeed = 1.5 * -moveDir.x;
+        this.physicsCar.body.SetAngularVelocity(new Gfx3Jolt.Vec3(0, turnSpeed, 0));
+    }
 
     // --- SYNC VISUALS ---
     const visualOrigin: vec3 = [pos.GetX(), pos.GetY(), pos.GetZ()];
@@ -160,31 +172,30 @@ export class Tank {
     const bodyRecoilOffset = this.recoil * -0.25; 
     const finalVisualOrigin: vec3 = [
         visualOrigin[0] + forwardVec[0] * bodyRecoilOffset,
-        visualOrigin[1] - 0.45, 
+        visualOrigin[1] - 0.55, // Center of mass offset
         visualOrigin[2] + forwardVec[2] * bodyRecoilOffset
     ];
 
-    // Tank mesh is naturally facing Z- (from createBoxMesh faces).
-    // Physics car faces Z+.
-    // So we apply a 180 degree rotation to the visual body.
-    const visualRotation = q.mul(Quaternion.createFromEuler(0, Math.PI, 0, 'YXZ').w, 0, 1, 0);
+    // Tank mesh components facing Z- will point at Z+ after this rotation
+    // This aligns visual and physical "Front".
+    const visualRotation = q.mul(0, 0, 1, 0); 
     const bodyMatrix = UT.MAT4_TRANSFORM(finalVisualOrigin, [0, 0, 0], [1, 1, 1], visualRotation);
     
     this.body.enableManualTransform(bodyMatrix);
 
     const syncRigid = (mesh: Gfx3Mesh, localPos: vec3) => {
+        // localPos is relative to visual forward (Z-)
         const localMatrix = UT.MAT4_TRANSLATE(localPos[0], localPos[1], localPos[2]);
         mesh.enableManualTransform(UT.MAT4_MULTIPLY(bodyMatrix, localMatrix));
     };
 
     syncRigid(this.trackL, [-1.425, -0.1, 0]);
     syncRigid(this.trackR, [1.425, -0.1, 0]);
-    syncRigid(this.engine, [0, 0.3, 1.8]);
+    syncRigid(this.engine, [0, 0.3, 1.8]); // Engine at the back
 
     // INDEPENDENT TURRET (Matches Camera Yaw)
-    // The tank body is facing Z- relative to physics world.
-    // aimYaw is global. this.rotation is global yaw of physics Z+.
-    // So turret yaw relative to body should be:
+    // The tank physics front is Z+.
+    // Camera aimYaw (relative to Z-) matches the body at PI offset.
     this.turretYaw = aimYaw - this.rotation + Math.PI;
     const localYawQ = Quaternion.createFromEuler(this.turretYaw, 0, 0, 'YXZ');
     
@@ -200,6 +211,7 @@ export class Tank {
     const barrelRecoilVis = Math.max(this.shellRecoil * 0.7, this.grenadeRecoil * 0.4);
     const barrelBaseMatrix = UT.MAT4_MULTIPLY(turretMatrix, UT.MAT4_TRANSLATE(0, 0.08, 0));
     const barrelRotMatrix = UT.MAT4_MULTIPLY(barrelBaseMatrix, pitchQ.toMatrix4());
+    // Visual barrel points at Z- (forward relative to visual orientation)
     const barrelMatrix = UT.MAT4_MULTIPLY(barrelRotMatrix, UT.MAT4_TRANSLATE(0, 0, -1.125 + barrelRecoilVis));
     this.barrel.enableManualTransform(barrelMatrix);
     
@@ -211,19 +223,19 @@ export class Tank {
     syncToTurret(this.hatch, [0, 0.45, 0.3]);
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
-    // Muzzle Logic
+    // Muzzle Logic (Barrel points at Z-)
     const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.15, 1]);
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, muzzleLocalPos);
-    const muzzleWorldPos: vec3 = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
+    this.muzzlePos = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
     
     const tipLocalPos: vec4 = new Float32Array([0, 0, -2.0, 1]);
     const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, tipLocalPos);
-    const tipWorldPos: vec3 = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
+    this.tipPos = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
     
-    const muzzleWorldDir = UT.VEC3_NORMALIZE([
-        tipWorldPos[0] - muzzleWorldPos[0],
-        tipWorldPos[1] - muzzleWorldPos[1],
-        tipWorldPos[2] - muzzleWorldPos[2]
+    this.muzzleDir = UT.VEC3_NORMALIZE([
+        this.tipPos[0] - this.muzzlePos[0],
+        this.tipPos[1] - this.muzzlePos[1],
+        this.tipPos[2] - this.muzzlePos[2]
     ]);
 
     // Teleport out of bounds
@@ -236,8 +248,8 @@ export class Tank {
     return { 
       normal: didShootNormal, 
       grenade: didShootGrenade,
-      muzzlePos: muzzleWorldPos,
-      muzzleDir: muzzleWorldDir
+      muzzlePos: this.muzzlePos,
+      muzzleDir: this.muzzleDir
     };
   }
   

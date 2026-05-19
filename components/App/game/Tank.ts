@@ -70,20 +70,20 @@ export class Tank {
       y: 5.0, 
       z: 0,
       size: [2.5, 1.0, 3.8],
-      mass: 8000, // Heavy tank, very stable
-      maxEngineTorque: 9000, 
-      clutchStrength: 20.0,
+      mass: 12000, // Even heavier
+      maxEngineTorque: 15000, 
+      clutchStrength: 40.0,
       wheelRadius: 0.5,
       wheelWidth: 0.5,
-      wheelOffsetHorizontal: 1.5, // Length offset
+      wheelOffsetHorizontal: 1.5,
       wheelOffsetVertical: 0.3,
-      maxSteerAngle: 45, 
-      suspensionMaxLength: 0.3,
+      maxSteerAngle: 35, 
+      suspensionMaxLength: 0.25,
       suspensionMinLength: 0.1,
       fourWheelDrive: true,
-      airResistance: 1.2, // High damping to prevent sliding
-      rollingResistance: 0.5, 
-      friction: 4.0 // High ground friction for tracks
+      airResistance: 2.5, // Significantly dampened
+      rollingResistance: 1.0, 
+      friction: 8.0 
     });
   }
 
@@ -125,21 +125,21 @@ export class Tank {
     this.physicsCar.inputLeftPressed = moveDir.x < -0.1;
     this.physicsCar.inputRightPressed = moveDir.x > 0.1;
 
-    if (fireNormal && this.shellRecoil <= 0) {
+    if (fireNormal && this.shellRecoil < 0.05) {
       this.shellRecoil = 1.0;
       didShootNormal = true;
       this.recoil = 1.0; 
     }
 
-    if (fireGrenade && this.grenadeRecoil <= 0) {
+    if (fireGrenade && this.grenadeRecoil < 0.05) {
       this.grenadeRecoil = 1.0;
       didShootGrenade = true;
       this.recoil = 1.8; 
     }
 
-    this.shellRecoil = UT.LERP(this.shellRecoil, 0, 4.5 * (ts / 1000));
-    this.grenadeRecoil = UT.LERP(this.grenadeRecoil, 0, 1.5 * (ts / 1000));
-    this.recoil = UT.LERP(this.recoil, 0, 8.0 * (ts / 1000));
+    this.shellRecoil = Math.max(0, this.shellRecoil - (ts / 1000) * 5.0);
+    this.grenadeRecoil = Math.max(0, this.grenadeRecoil - (ts / 1000) * 1.2);
+    this.recoil = Math.max(0, this.recoil - (ts / 1000) * 8.0);
 
     // Physics State
     const pos = this.physicsCar.body.GetPosition();
@@ -224,19 +224,17 @@ export class Tank {
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
     // Muzzle Logic (Barrel points at Z-)
-    const muzzleLocalPos: vec4 = new Float32Array([0, 0, -1.15, 1]);
-    const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, muzzleLocalPos);
+    // Move muzzles even further away to prevent self-collision
+    const muzzleRelPos: vec4 = new Float32Array([0, 0, -5.0, 1]); 
+    const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, muzzleRelPos);
     this.muzzlePos = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
     
-    const tipLocalPos: vec4 = new Float32Array([0, 0, -2.0, 1]);
-    const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelMatrix, tipLocalPos);
+    const tipRelPos: vec4 = new Float32Array([0, 0, -6.0, 1]);
+    const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, tipRelPos);
     this.tipPos = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
     
-    this.muzzleDir = UT.VEC3_NORMALIZE([
-        this.tipPos[0] - this.muzzlePos[0],
-        this.tipPos[1] - this.muzzlePos[1],
-        this.tipPos[2] - this.muzzlePos[2]
-    ]);
+    const muzzleDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, new Float32Array([0, 0, -1, 0]));
+    this.muzzleDir = UT.VEC3_NORMALIZE([muzzleDirVec4[0], muzzleDirVec4[1], muzzleDirVec4[2]]);
 
     // Teleport out of bounds
     if (pos.GetY() < -20.0) {
@@ -262,6 +260,9 @@ export class Tank {
     this.barrel.draw();
     this.hatch.draw();
     this.antenna.draw();
+
+    const pos = this.physicsCar.body.GetPosition();
+    this.drawHealthBar([pos.GetX(), pos.GetY(), pos.GetZ()], this.hp, 100, cameraYaw);
   }
 
   drawHealthBar(origin: vec3, hp: number, maxHp: number, cameraYaw: number = 0) {

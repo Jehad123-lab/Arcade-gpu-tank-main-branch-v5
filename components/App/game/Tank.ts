@@ -70,20 +70,20 @@ export class Tank {
       y: 5.0, 
       z: 0,
       size: [2.5, 1.0, 3.8],
-      mass: 12000, // Even heavier
-      maxEngineTorque: 15000, 
-      clutchStrength: 40.0,
+      mass: 8000, 
+      maxEngineTorque: 80000, 
+      clutchStrength: 100.0,
       wheelRadius: 0.5,
       wheelWidth: 0.5,
       wheelOffsetHorizontal: 1.5,
       wheelOffsetVertical: 0.3,
-      maxSteerAngle: 35, 
-      suspensionMaxLength: 0.25,
+      maxSteerAngle: 40, 
+      suspensionMaxLength: 0.3,
       suspensionMinLength: 0.1,
       fourWheelDrive: true,
-      airResistance: 2.5, // Significantly dampened
-      rollingResistance: 1.0, 
-      friction: 8.0 
+      airResistance: 0.05, 
+      rollingResistance: 0.05, 
+      friction: 4.0 
     });
   }
 
@@ -158,10 +158,8 @@ export class Tank {
     this.rotation = Math.atan2(forwardVec[0], forwardVec[2]);
 
     // Stationary Turning Logic (Simulate Tracks)
-    const angularVel = this.physicsCar.body.GetAngularVelocity();
-    if (Math.abs(moveDir.x) > 0.1 && this.speed < 1.0) {
-        // Force rotation when nearly stationary
-        const turnSpeed = 1.5 * -moveDir.x;
+    if (Math.abs(moveDir.x) > 0.1 && this.speed < 2.0) {
+        const turnSpeed = 2.0 * -moveDir.x;
         this.physicsCar.body.SetAngularVelocity(new Gfx3Jolt.Vec3(0, turnSpeed, 0));
     }
 
@@ -224,14 +222,9 @@ export class Tank {
     syncToTurret(this.antenna, [-0.6, 1.1, 0.6]);
 
     // Muzzle Logic (Barrel points at Z-)
-    // Move muzzles even further away to prevent self-collision
-    const muzzleRelPos: vec4 = new Float32Array([0, 0, -5.0, 1]); 
+    const muzzleRelPos: vec4 = new Float32Array([0, 0, -3.8, 1]); 
     const muzzleWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, muzzleRelPos);
     this.muzzlePos = [muzzleWorldPosVec4[0], muzzleWorldPosVec4[1], muzzleWorldPosVec4[2]];
-    
-    const tipRelPos: vec4 = new Float32Array([0, 0, -6.0, 1]);
-    const tipWorldPosVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, tipRelPos);
-    this.tipPos = [tipWorldPosVec4[0], tipWorldPosVec4[1], tipWorldPosVec4[2]];
     
     const muzzleDirVec4 = UT.MAT4_MULTIPLY_BY_VEC4(barrelRotMatrix, new Float32Array([0, 0, -1, 0]));
     this.muzzleDir = UT.VEC3_NORMALIZE([muzzleDirVec4[0], muzzleDirVec4[1], muzzleDirVec4[2]]);
